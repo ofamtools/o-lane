@@ -51,6 +51,12 @@ func (a *App) registerPage() error {
 	a.r.DefineOwn("pane").Verb("choices", func(c ochazuke.Ctx) ochazuke.Result {
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return a.paneChoices(ctx) }).Replacing("pane-choices")
 	}, "List tuios windows with explicit session references").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+	a.r.DefineOwn("project").Verb("choices", func(c ochazuke.Ctx) ochazuke.Result {
+		if e := a.configure(); e != nil {
+			return done(nil, e)
+		}
+		return ochazuke.Pending(func(ctx context.Context) (any, error) { return a.projectChoices(ctx) }).Replacing("project-choices")
+	}, "List project references for completion (recorded on lanes plus lanes.project-source)").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	a.r.DefineOwn("pane").Verb("roles", func(c ochazuke.Ctx) ochazuke.Result {
 		return done(a.r.Settings().Strings("lanes.pane-roles"), nil)
 	}, "List configured participant roles").Fetch().Quiet().Agent(ochazuke.AgentAllow)
@@ -59,6 +65,9 @@ func (a *App) registerPage() error {
 			return done(nil, e)
 		}
 		s, o := *a.store, a.pageOptions()
+		if project := ochazuke.StringArg(c.Args, "project", ""); project != "" {
+			o.project = project
+		}
 		reader, run := a.reader, commandRunner(a.run)
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
 			if a.rowsLoaded != nil {
@@ -67,6 +76,9 @@ func (a *App) registerPage() error {
 			}
 		})
 	}, "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+	rowsOp := a.r.Operations["lane.rows"]
+	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter")}
+	a.r.Operations[rowsOp.Key()] = rowsOp
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
 	for _, row := range []struct{ key, verb string }{{"enter", "show"}, {"s", "choose-state"}, {"g p", "focus-pane"}, {"a", "choose-pane"}, {"n", "note"}, {"y", "yank-id"}} {
@@ -89,15 +101,21 @@ type pageOptions struct {
 	live                                                               liveOptions
 	liveTones                                                          bool
 	liveRows                                                           map[string]Live
+	groupProjects, projectColumn                                       bool
+	project                                                            string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now()}
+	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), project: cfg.String("lanes.project-filter")}
 }
 func (o pageOptions) columns() []ochazuke.Column {
-	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}, {Title: "Repo", Max: 24, Priority: 4}, {Title: "Estimate", Width: 9, Priority: 5}}
+	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
+	if o.projectColumn {
+		cols = append(cols, ochazuke.Column{Title: "Project", Max: 24, Priority: 3})
+	}
+	cols = append(cols, ochazuke.Column{Title: "Repo", Max: 24, Priority: 4}, ochazuke.Column{Title: "Estimate", Width: 9, Priority: 5})
 	if o.durations {
 		cols = append(cols, ochazuke.Column{Title: "Elapsed / duration", Width: 18, Priority: 3})
 	}
@@ -112,10 +130,10 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 		return p
 	}
 	fields := []ocli.CatalogDetailField{}
-	for _, name := range []string{"id", "name", "parent", "state", "rolled_state", "live_state", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
+	for _, name := range []string{"id", "name", "parent", "state", "rolled_state", "live_state", "project", "effective_project", "project_association", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
 		fields = append(fields, ocli.CatalogDetailField{Label: strings.ReplaceAll(name, "_", " "), Field: name})
 	}
-	p.Detail = &ocli.CatalogDetail{Fields: []string{"name", "state", "wording", "scope", "done_when", "repo", "branch", "worktree", "estimate", "depends", "links", "panes"}, Sections: []ocli.CatalogDetailSection{
+	p.Detail = &ocli.CatalogDetail{Fields: []string{"name", "state", "effective_project", "wording", "scope", "done_when", "repo", "branch", "worktree", "estimate", "depends", "links", "panes"}, Sections: []ocli.CatalogDetailSection{
 		{Kind: "markdown", Title: "Owner wording", Field: "wording"},
 		{Kind: "markdown", Title: "Scope", Field: "scope"},
 		{Kind: "markdown", Title: "Done when", Field: "done_when"},
@@ -174,6 +192,29 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 		}
 		return lanes[i].Created.After(lanes[j].Created)
 	})
+	if o.groupProjects {
+		// Roots group by effective project (stable, so newest first within a
+		// group); unassociated roots come last. Children keep tree order.
+		group := func(q Lane) string { p, _ := effectiveProject(lanes, q); return strings.ToLower(p) }
+		// Children all sort after roots; stability keeps sibling order.
+		rank := func(q Lane) (int, string) {
+			if q.Parent != "" {
+				return 2, ""
+			}
+			if g := group(q); g != "" {
+				return 0, g
+			}
+			return 1, ""
+		}
+		sort.SliceStable(lanes, func(i, j int) bool {
+			ri, gi := rank(lanes[i])
+			rj, gj := rank(lanes[j])
+			if ri != rj {
+				return ri < rj
+			}
+			return gi < gj
+		})
+	}
 	out := []ocli.Row{}
 	var walk func(string)
 	walk = func(parent string) {
@@ -181,12 +222,23 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			if q.Parent != parent {
 				continue
 			}
+			if o.project != "" && !subtreeProject(lanes, q, o.project) {
+				continue
+			}
 			v := s.view(q, lanes)
 			if parent == "" && o.hideClosed && !s.states()[v.RolledState].Open {
 				continue
 			}
 			state := v.RolledState
-			cells := []string{q.Name, state, q.Repo, q.Estimate}
+			cells := []string{q.Name, state}
+			if o.projectColumn {
+				project := v.EffectiveProject
+				if project == "" {
+					project = "unassociated"
+				}
+				cells = append(cells, project)
+			}
+			cells = append(cells, q.Repo, q.Estimate)
 			live, hasLive := o.liveRows[q.ID]
 			showLive := hasLive && o.live.on && s.states()[q.State].Open
 			if showLive {

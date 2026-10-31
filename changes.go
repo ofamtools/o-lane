@@ -12,7 +12,7 @@ import (
 
 // Only domain fields exposed by set are editable; wording and parent retain
 // their dedicated owner-policy/cycle-check verbs.
-var editable = []string{"estimate", "repo", "base", "branch", "worktree", "depends", "plan", "task", "scope", "done_when", "tests"}
+var editable = []string{"estimate", "repo", "base", "branch", "worktree", "depends", "plan", "task", "scope", "done_when", "tests", "project"}
 
 func setSpec(q *Spec, prop string, value any) error {
 	if !slices.Contains(editable, prop) {

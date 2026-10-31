@@ -8,6 +8,7 @@
 - `actor.go`: harness detection, per-run identity, the single framework override and store policy fallback; the app honours framework rights overrides.
 - `plan.go`: Goldmark table parsing, validated configurable column aliases, shared JSON/plan definition handler, exact plan relation queries and read-only directory checks.
 - `plan_test.go`, `testdata/plans/`: three copied table variants and golden specs; CLI/MCP rights, idempotency, source preservation and dry-run isolation regressions.
+- `project.go`, `project_test.go`: project references (optional host kind, kind-less matching), nearest-ancestor inheritance, the shared project association handler, and the optional `lanes.project-source` listing/completion through the injectable runner. No project store; mtm is never required.
 - `changes.go`: atomic define/add, domain mutations, state presets, shared association handler, cycle refusal and undoable subtree delete.
 - `store.go`: process lock, per-root documents, transaction recovery, snapshots and actor-safe undo with append-only audit receipts.
 - `atomic.go`: private synced temporary writes, rename and directory sync (adapted from o-questions).
@@ -21,7 +22,7 @@
 - `mcp_test.go`: generic framework stdio protocol, transport attribution, dry run, rights refusals and generated harness config.
 - `page.go`: portable tree-page declaration, lifecycle/live word spans and live glyph tones, derived duration/pane-role cells, detail sections, binding rows and chooser sources; state and pane chooser entry points share existing domain handlers. The pane chooser discovers sessions/windows through the injectable runner and carries explicit session/window references.
 - `tui.go`: standalone mount, asynchronous replacement row loads and optional refresh timer, reader lifetime/generation/cancellation and live settings projection, plus a cached read-only detail viewer. Rendering reads only cached rows; tree/field/detail layout and keys belong to ochazuke. CLI/smoke/catalog requests start no subscription.
-- `page_test.go`, `cmd/o-story/stories/lanes/*.json`: monogatari fixtures and the four L4 plus two L8 stories, plus tree/catalog mounting, opt-outs, fixed-clock durations, ordering, pane chooser failures, focus and yank checks. Data and identity are isolated; every external command is fake.
+- `page_test.go`, `cmd/o-story/stories/lanes/*.json`: monogatari fixtures and the four L4, two L8 and two project stories, plus tree/catalog mounting, opt-outs, fixed-clock durations, ordering, pane chooser failures, focus and yank checks. Data and identity are isolated; every external command is fake.
 - `Makefile`: bounded Go build/test and coordinator race gate.
 
 The app owns domain state and persistence; released ochazuke owns the CLI, catalog, rights gate and UI. No family-library modifications or local module replacements are required.

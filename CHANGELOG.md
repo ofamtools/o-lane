@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Scope lanes to projects: a `project` reference on lanes (inherited from the nearest ancestor), `--project` on lane define/add and plan define, `lane associate/unassociate --project` sharing one handler with `project associate/unassociate`, `project lanes`/`project list`, and `--project` filters on lane list/tree/rows. Records without a project load as unassociated.
+- Lanes page: project column, grouping of roots by project and a project filter (`lanes.project-column`, `lanes.group-by-project`, `lanes.project-filter`). Optional `lanes.project-source` (mtm when installed, else none) completes project names through the injectable runner; it is never required.
+
 - Derive live lane/subtree state from explicit tuios window snapshots and a cancellable standalone subscription, with seq/boot resume, gap recovery, disconnect handling and retained closed-pane references.
 - Add configurable live names, tones and glyphs, precedence and aggregate roles, combined lifecycle/live cells, per-pane live detail and live/colour opt-outs. Preserve existing string-only state mappings; live reads never write lane history.
 - Include live projections in CLI/MCP read answers and portable page rows. Mounted extensions use fresh snapshots on row fetch; persistent hosted subscriptions await a general catalog transport hook.

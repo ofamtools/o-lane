@@ -38,6 +38,13 @@ func appSettings() []ochazuke.Setting {
 		{Name: "lanes.live-states", Type: ochazuke.SettingString, Default: defaultLiveStates, Validate: func(v any) error { _, e := parseLiveStates(fmt.Sprint(v)); return e }, Description: "JSON pane state to {name, tone, glyph} map; legacy string labels accepted"},
 		{Name: "lanes.live-precedence", Type: ochazuke.SettingList, Default: []string{"needs input", "errored", "working", "done", "idle", "closed"}, Description: "Live state aggregation priority"},
 		{Name: "lanes.live-roles", Type: ochazuke.SettingList, Default: []string{}, Description: "Roles counted in the aggregate; empty includes all; pane details always include every role"},
+		{Name: "lanes.project-source", Type: ochazuke.SettingString, Default: projectSourceDefault(), Validate: func(v any) error {
+			if x := fmt.Sprint(v); x != "mtm" && x != "none" && x != "" {
+				return fmt.Errorf("lanes.project-source: use mtm or none")
+			}
+			return nil
+		}, Description: "Where project completion looks: mtm (default when mtm is on PATH) or none; never required"},
+		{Name: "lanes.project-filter", Type: ochazuke.SettingString, Default: "", Description: "Page shows only subtrees containing this project; empty shows all"},
 		{Name: "backup.daily", Type: ochazuke.SettingBoolean, Default: true, Description: "Private daily backup before first mutation"},
 		{Name: "backup.keep", Type: ochazuke.SettingInteger, Default: 14, Description: "Daily archives to retain"},
 	}
@@ -48,6 +55,7 @@ func appSettings() []ochazuke.Setting {
 	}{
 		{"lanes.tree", true, "Show lane nesting; changes apply on the next page mount"}, {"lanes.state-tones", true, "Colour lifecycle states"}, {"lanes.detail", true, "Show lane detail sections; changes apply on the next page mount"},
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.live-tones", true, "Colour live state"},
+		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})
 	}

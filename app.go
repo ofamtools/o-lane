@@ -151,13 +151,15 @@ func (a *App) specs() []verbSpec {
 		fields[p] = param("Lane " + p)
 	}
 	fields["depends"] = ochazuke.Parameter{Type: "array", Description: "Dependencies, including external events"}
+	fields["project"] = projectParam(projectHelp)
+	projectFilter := param("Only lanes whose effective project matches this reference")
 	rows := []verbSpec{
 		{"lane", "add", "Create one lane; no parent creates a root", fields, []string{"name"}, false},
 		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false},
 		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false},
 		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true},
-		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}}, nil, true},
-		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}}, nil, true},
+		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "project": projectFilter}, nil, true},
+		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project")}, nil, true},
 		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
 		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true},
 		{"lane", "set", "Set one spec property", common(map[string]ochazuke.Parameter{"prop": required("Property"), "value": required("New value; JSON array for depends")}), []string{"target", "prop", "value"}, false},
@@ -181,16 +183,27 @@ func (a *App) specs() []verbSpec {
 	for _, verb := range []string{"link", "unlink"} {
 		rows = append(rows, verbSpec{"lane", verb, "Add or remove a typed link", common(map[string]ochazuke.Parameter{"kind": required("Link kind"), "link": required("Link target"), "label": param("Label")}), []string{"target", "kind", "link"}, false})
 	}
-	for _, noun := range []string{"lane", "pane"} {
+	for _, noun := range []string{"lane", "pane", "project"} {
 		for _, verb := range []string{"associate", "unassociate"} {
 			m := common(map[string]ochazuke.Parameter{"lane": param("Lane ID for pane-side relation"), "pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role; default implementer"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind")})
 			pos := []string{"target", "pane"}
-			if noun == "pane" {
+			desc := "Associate or unassociate a lane and pane"
+			switch noun {
+			case "lane":
+				m["project"] = projectParam("Project reference to associate (or, for unassociate, to remove); a root's project covers its subtree")
+				desc = "Associate or unassociate a lane with a pane or project"
+			case "pane":
 				pos = []string{"pane", "lane"}
+			case "project":
+				m = map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "lane": required("Lane ID, unique prefix or name")}
+				pos = []string{"project", "lane"}
+				desc = "Associate or unassociate a project and lane; same handler as lane." + verb + " --project"
 			}
-			rows = append(rows, verbSpec{noun, verb, "Associate or unassociate a lane and pane", m, pos, false})
+			rows = append(rows, verbSpec{noun, verb, desc, m, pos, false})
 		}
 	}
+	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference")}, []string{"project"}, true})
+	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true})
 	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true})
 	return rows
 }
@@ -267,6 +280,36 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			p.Window = str("target")
 		}
 	}
+	project := str("project")
+	if noun == "project" {
+		switch verb {
+		case "lanes":
+			rows, e := s.List()
+			if e != nil {
+				return done(nil, e)
+			}
+			out := []View{}
+			for _, q := range rows {
+				if v := s.view(q, rows); projectMatches(v.EffectiveProject, project) {
+					out = append(out, v)
+				}
+			}
+			e = a.enrichLive(out)
+			return done(out, e)
+		case "list":
+			out, e := a.projectRows(context.Background())
+			return done(out, e)
+		}
+		target = str("lane")
+		if project == "" {
+			project = str("target")
+		}
+		if project == "" {
+			return done(nil, fmt.Errorf("project.%s needs a project reference", verb))
+		}
+		q, e := s.AssociateProject(target, project, verb == "unassociate")
+		return done(q, e)
+	}
 	if noun == "plan" && verb == "lanes" {
 		return a.planLanes(str("plan"))
 	}
@@ -293,10 +336,11 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			return done(nil, e)
 		}
 		out := []View{}
+		inProject := func(q Lane) bool { return project == "" || subtreeProject(rows, q, project) }
 		var walk func(string, bool)
 		walk = func(parent string, hide bool) {
 			for _, q := range rows {
-				if q.Parent != parent {
+				if q.Parent != parent || !inProject(q) {
 					continue
 				}
 				if q.Parent == "" && hide {
@@ -322,8 +366,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 				parent = q.ID
 			}
 			for _, q := range rows {
-				if parent == "" || q.Parent == parent {
-					out = append(out, s.view(q, rows))
+				v := s.view(q, rows)
+				if (parent == "" || q.Parent == parent) && (project == "" || projectMatches(v.EffectiveProject, project)) {
+					out = append(out, v)
 				}
 			}
 		}
@@ -407,7 +452,23 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		if p.Role != "" && !slices.Contains(a.r.Settings().Strings("lanes.pane-roles"), p.Role) {
 			return done(nil, fmt.Errorf("unknown role %q; configure lanes.pane-roles", p.Role))
 		}
-		q, e := s.Associate(target, p, verb == "unassociate")
+		remove := verb == "unassociate"
+		if project != "" && p.Window == "" && p.Host == "" && p.Harness == "" && p.Model == "" && p.Agent == "" {
+			q, e := s.AssociateProject(target, project, remove)
+			return done(q, e)
+		}
+		if project != "" {
+			// Both relations in one call share one snapshot and one undo.
+			q, e := s.mutate(verb, target, func(q *Lane, _ *[]Lane) error {
+				if e := s.project(q, project, remove); e != nil {
+					return e
+				}
+				s.associate(q, p, remove)
+				return nil
+			})
+			return done(q, e)
+		}
+		q, e := s.Associate(target, p, remove)
 		return done(q, e)
 	case "link", "unlink":
 		link := Link{Kind: str("kind"), Target: str("link"), Label: str("label")}

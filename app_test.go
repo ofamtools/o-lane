@@ -14,7 +14,7 @@ func fixture(t *testing.T) string {
 	base := t.TempDir()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") {
+		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "MTM_") {
 			t.Setenv(key, "")
 		}
 	}
@@ -24,8 +24,10 @@ func fixture(t *testing.T) string {
 	if err := os.MkdirAll(bin, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bin, "tuios"), []byte("#!/bin/sh\nprintf 'tuios unavailable in fixture\\n' >&2\nexit 1\n"), 0700); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"tuios", "mtm"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf '"+name+" unavailable in fixture\\n' >&2\nexit 1\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
 	for _, k := range []string{"TUIOS_SESSION", "TUIOS_PANE_ID", "TUIOS_HARNESS", "TUIOS_AGENT_NAME", "AGENT_HARNESS", "AGENT_MODEL", "OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "OCHAZUKE_MODEL", "O_LANE_ACTOR", "CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"} {

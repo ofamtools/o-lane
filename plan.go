@@ -224,6 +224,7 @@ func defineParams() map[string]ochazuke.Parameter {
 		"name":      param("Root name; defaults to the plan title or filename"),
 		"wording":   param("Verbatim owner wording on root creation only"),
 		"task":      param("Optional root task link"),
+		"project":   projectParam("Project for the batch's top lanes (plan: the root); children inherit. " + projectHelp),
 	}
 }
 
@@ -352,7 +353,7 @@ func (a *App) define(args ochazuke.Arguments) ochazuke.Result {
 		if str("name") != "" {
 			p.Name = str("name")
 		}
-		root := Spec{Name: p.Name, Wording: str("wording"), Task: str("task"), Plan: p.Path}
+		root := Spec{Name: p.Name, Wording: str("wording"), Task: str("task"), Plan: p.Path, Project: str("project")}
 		specs = append(specs, root)
 		var rootFields map[string]any
 		_ = decode(root, &rootFields)
@@ -364,6 +365,23 @@ func (a *App) define(args ochazuke.Arguments) ochazuke.Result {
 			spec.Parent = root.Name
 			specs = append(specs, spec)
 			fields = append(fields, p.fields[i])
+		}
+	}
+	if project := str("project"); project != "" && hasJSON {
+		// The batch's top lanes (parent outside the batch) take the project
+		// unless they name their own; batch children inherit from them.
+		names := map[string]bool{}
+		for _, spec := range specs {
+			names[spec.Name] = true
+		}
+		for i := range specs {
+			if specs[i].Project == "" && !names[specs[i].Parent] {
+				specs[i].Project = project
+				if fields[i] == nil {
+					fields[i] = map[string]any{}
+				}
+				fields[i]["project"] = project
+			}
 		}
 	}
 	if e := validateDefinitions(specs); e != nil {

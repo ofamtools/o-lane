@@ -68,6 +68,7 @@ type Spec struct {
 	Estimate string   `json:"estimate,omitempty"`
 	Plan     string   `json:"plan,omitempty"`
 	Task     string   `json:"task,omitempty"`
+	Project  string   `json:"project,omitempty"`
 }
 type Lane struct {
 	Spec
@@ -88,10 +89,21 @@ type View struct {
 	EstimateMinutes float64    `json:"estimate_minutes"`
 	RolledState     string     `json:"rolled_state"`
 	Association     string     `json:"association"`
+	// EffectiveProject is the lane's own project or the nearest ancestor's.
+	EffectiveProject   string `json:"effective_project"`
+	ProjectFrom        string `json:"project_from,omitempty"`
+	ProjectAssociation string `json:"project_association"`
 }
 
 func (s *Store) view(q Lane, rows []Lane) View {
-	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledState: q.State, Association: "unassociated"}
+	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledState: q.State, Association: "unassociated", ProjectAssociation: "unassociated"}
+	v.EffectiveProject, v.ProjectFrom = effectiveProject(rows, q)
+	switch {
+	case v.ProjectFrom == q.ID:
+		v.ProjectAssociation = "associated"
+	case v.ProjectFrom != "":
+		v.ProjectAssociation = "inherited"
+	}
 	for _, p := range q.Panes {
 		if p.Window != "" {
 			v.Association = "associated"

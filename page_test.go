@@ -161,7 +161,7 @@ func TestPageProjection(t *testing.T) {
 	if rows[1].Parent != rows[0].ID || rows[2].Parent != rows[1].ID {
 		t.Fatal(rows)
 	}
-	if rows[0].Cells[1] != "planned" || rows[2].Cells[1] != "running" || rows[2].Cells[4] != "1h 30m" || rows[2].Cells[5] != "reviewer" {
+	if rows[0].Cells[1] != "planned" || rows[2].Cells[1] != "running" || rows[2].Cells[5] != "1h 30m" || rows[2].Cells[6] != "reviewer" {
 		t.Fatal(rows)
 	}
 	if rows[2].Tones[0].Tone != ochazuke.ToneWorking {
@@ -172,10 +172,10 @@ func TestPageProjection(t *testing.T) {
 	}
 	a.store.Now = func() time.Time { return time.Date(2026, 1, 1, 17, 0, 0, 0, time.UTC) }
 	rows, e = laneRows(a.store, a.pageOptions())
-	if e != nil || rows[2].Cells[4] != "1h 30m" {
+	if e != nil || rows[2].Cells[5] != "1h 30m" {
 		t.Fatal(rows, e)
 	}
-	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.tree"} {
+	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.tree", "lanes.project-column"} {
 		if e = a.r.Settings().Set(name, false); e != nil {
 			t.Fatal(e)
 		}

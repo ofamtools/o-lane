@@ -1,0 +1,6 @@
+{
+ "name":"lanes/by-project-off", "app":"o-lane", "width":160, "height":42,
+ "values":{"lanes.group-by-project":false,"lanes.project-column":false},
+ "seed":{"lanes":[{"name":"Alpha task","project":"alpha"},{"name":"Loose task"}]},
+ "expect":{"order":["Loose task","Alpha task"],"lacks":["Project"]}
+}

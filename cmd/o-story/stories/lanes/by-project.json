@@ -1,0 +1,26 @@
+{
+  "name": "lanes/by-project",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {"name": "Loose task"},
+      {"name": "Zeta task", "project": "zeta"},
+      {"name": "Zeta child", "parent": "Zeta task"},
+      {"name": "Alpha task", "project": "mtm:alpha"}
+    ]
+  },
+  "script": ["j", "j"],
+  "expect": [
+    {
+      "after": 0,
+      "contains": ["Project", "mtm:alpha", "zeta", "unassociated"],
+      "order": ["Alpha task", "Zeta task", "Zeta child", "Loose task"]
+    },
+    {
+      "after": 2,
+      "highlightedText": "Zeta child"
+    }
+  ]
+}
