@@ -122,7 +122,10 @@ func TestCLIVerbs(t *testing.T) {
 	if !found {
 		t.Fatal(*f.calls)
 	}
-	f.lane("unassociate", "child", "w2", "--session", "s")
+	f.lane("unassociate", "child", "w2")
+	if q := mustResolve(t, f.a.store, "child"); len(q.Panes) != 1 {
+		t.Fatalf("unassociate by window ID left the pane: %+v", q.Panes)
+	}
 	f.call("pane", "associate", "w2", "child", "--session", "s", "--role", "reviewer")
 	if got := f.call("pane", "lanes", "w2", "--session", "s").([]any); len(got) != 1 {
 		t.Fatal(got)

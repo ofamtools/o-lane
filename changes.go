@@ -286,7 +286,12 @@ func (s *Store) associate(q *Lane, p Pane, remove bool) {
 	p.Since = s.now()
 	if remove {
 		kind = "unassociate"
-		q.Panes = slices.DeleteFunc(q.Panes, func(old Pane) bool { return paneKey(old, p) })
+		q.Panes = slices.DeleteFunc(q.Panes, func(old Pane) bool {
+			if p.Window != "" {
+				return old.Window == p.Window && (p.Session == "" || old.Session == p.Session) && (p.Host == "" || old.Host == p.Host)
+			}
+			return paneKey(old, p)
+		})
 	} else {
 		found := false
 		for i, old := range q.Panes {
