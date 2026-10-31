@@ -5,30 +5,74 @@ import (
 	"github.com/unixsuperhero/ochazuke"
 )
 
-// Resolve identity once at the CLI boundary, as in o-questions. An explicit
-// framework identity wins; a pane alone never implies an agent.
+// Identity is advisory. Harness detection always keeps agent status; the one
+// explicit override may fill identity fields, never promote a detected agent.
 func cliActor(env func(string) string) (Actor, error) {
-	if env("OCHAZUKE_ACTOR") != "" {
-		return ochazuke.ActorFromEnv(env)
-	}
 	a := Actor{Kind: "owner", Name: env("TUIOS_AGENT_NAME"), Harness: env("TUIOS_HARNESS"), Pane: env("TUIOS_PANE_ID"), Session: env("TUIOS_SESSION"), Model: env("AGENT_MODEL")}
-	if a.Harness == "" {
-		a.Harness = env("AGENT_HARNESS")
+	for _, key := range []string{"AGENT_HARNESS", "OCHAZUKE_HARNESS"} {
+		if a.Harness == "" {
+			a.Harness = env(key)
+		}
 	}
-	if a.Harness == "" && (env("CODEX_THREAD_ID") != "" || env("CODEX_CI") != "") {
+	if a.Model == "" {
+		a.Model = env("OCHAZUKE_MODEL")
+	}
+	run := ""
+	if id := env("CODEX_THREAD_ID"); id != "" {
+		run = "codex:" + id
+		if a.Harness == "" {
+			a.Harness = "codex"
+		}
+	}
+	if a.Harness == "" && env("CODEX_CI") != "" {
 		a.Harness = "codex"
+	}
+	for _, key := range []string{"CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"} {
+		if id := env(key); id != "" && run == "" {
+			run = "claude-code:" + id
+			if a.Harness == "" {
+				a.Harness = "claude-code"
+			}
+		}
 	}
 	if a.Harness == "" && env("CLAUDE_CODE_ENTRYPOINT") != "" {
 		a.Harness = "claude-code"
 	}
-	if a.Harness != "" {
+	detected := a.Harness != ""
+	if detected {
 		a.Kind = "agent"
 	}
-	if a.Name == "" {
-		a.Name = a.Harness
+	if env("OCHAZUKE_ACTOR") != "" {
+		explicit, e := ochazuke.ActorFromEnv(env)
+		if e != nil {
+			return Actor{}, e
+		}
+		if detected {
+			explicit.Kind = "agent"
+		}
+		if explicit.Name != "" {
+			a.Name = explicit.Name
+		}
+		if explicit.Harness != "" {
+			a.Harness = explicit.Harness
+		}
+		if explicit.Pane != "" {
+			a.Pane = explicit.Pane
+		}
+		if explicit.Session != "" {
+			a.Session = explicit.Session
+		}
+		if explicit.Model != "" {
+			a.Model = explicit.Model
+		}
+		a.Kind = explicit.Kind
 	}
-	if raw := env("O_LANE_ACTOR"); raw != "" {
-		return ochazuke.ParseActor(raw)
+	if a.IsAgent() && run != "" {
+		if a.Name == "" {
+			a.Name = run
+		} else {
+			a.Name += " (" + run + ")"
+		}
 	}
 	return a, nil
 }

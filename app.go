@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/unixsuperhero/ochazuke"
 	ocli "github.com/unixsuperhero/ochazuke/cli"
@@ -46,8 +47,11 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		if len(argv) == 0 {
 			return nil, fmt.Errorf("empty command")
 		}
-		return exec.CommandContext(ctx, argv[0], argv[1:]...).Output()
+		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+		cmd.WaitDelay = 500 * time.Millisecond
+		return cmd.Output()
 	}
+	a.store.Warn = func(message string) { fmt.Fprintln(errOut, message) }
 	a.r.Config().App = "o-lane"
 	if e = a.r.DeclareSetting(appSettings()...); e != nil {
 		return nil, e
@@ -110,6 +114,14 @@ func (a *App) configure() error {
 		return e
 	}
 	a.store.States = states
+	var presets map[string]string
+	if e = json.Unmarshal([]byte(cfg.String("lanes.state-presets")), &presets); e != nil {
+		return fmt.Errorf("lanes.state-presets: %w", e)
+	}
+	if presets == nil {
+		presets = map[string]string{}
+	}
+	a.store.StatePresets = presets
 	a.store.BackupDaily = cfg.Bool("backup.daily")
 	a.store.BackupKeep = cfg.Int("backup.keep")
 	return nil
@@ -131,7 +143,7 @@ func (a *App) specs() []verbSpec {
 	rows := []verbSpec{
 		{"lane", "add", "Create one lane; no parent creates a root", fields, []string{"name"}, false},
 		{"lane", "define", "Atomically define JSON lane specs; repeat by parent/name updates supplied fields", map[string]ochazuke.Parameter{"lanes": {Type: "array", Required: true, Description: "Lane spec objects; parents may appear in any order"}}, nil, false},
-		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent")}, nil, true},
+		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}}, nil, true},
 		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}}, nil, true},
 		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
 		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true},
@@ -207,7 +219,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			out := []View{}
 			for _, q := range rows {
 				for _, old := range q.Panes {
-					if old.Window == p.Window && (p.Session == "" || old.Session == p.Session) && old.Host == p.Host {
+					if paneMatches(old, p) {
 						out = append(out, s.view(q, rows))
 						break
 					}
@@ -236,7 +248,14 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		q, e := s.Define(specs)
 		return done(q, e)
 	case "list", "tree":
-		rows, e := s.List()
+		var rows []Lane
+		var e error
+		includeDeleted, _ := c.Args["deleted"].(bool)
+		if verb == "list" && includeDeleted {
+			rows, e = s.ListAll()
+		} else {
+			rows, e = s.List()
+		}
 		if e != nil {
 			return done(nil, e)
 		}
@@ -358,17 +377,15 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 	case "undo":
 		e := s.Undo()
 		return done("undone", e)
-	default:
-		state := map[string]string{"park": "parked", "review": "review", "merge": "merged", "finish": "done", "cancel": "cancelled", "reopen": "planned"}[verb]
-		if state != "" {
-			if verb == "merge" {
-				q, e := s.Merge(target, str("commit"), str("note"))
-				return done(q, e)
-			}
-			q, e := s.State(target, state, str("note"))
+	case "park", "review", "merge", "finish", "cancel", "reopen":
+		if verb == "merge" {
+			q, e := s.Merge(target, str("commit"), str("note"))
 			return done(q, e)
 		}
+		q, e := s.Preset(target, verb, str("note"))
+		return done(q, e)
 	}
+
 	return done(nil, fmt.Errorf("unknown verb %s.%s", noun, verb))
 }
 

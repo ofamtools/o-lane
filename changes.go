@@ -51,7 +51,7 @@ func (s *Store) add(rows *[]Lane, spec Spec) (Lane, error) {
 		return Lane{}, errors.New("lane name must not be empty")
 	}
 	if spec.Parent != "" {
-		p, e := resolve(visible(*rows), spec.Parent)
+		p, e := resolveExact(visible(*rows), spec.Parent)
 		if e != nil {
 			return Lane{}, e
 		}
@@ -91,21 +91,43 @@ func (s *Store) Define(specs []Spec) (out []Lane, err error) {
 		return nil, errors.New("define needs at least one lane")
 	}
 	err = s.change("define", func(rows *[]Lane) error {
-		pending := append([]Spec{}, specs...)
+		type definition struct {
+			Spec
+			Index int
+		}
+		pending := []definition{}
+		batch := map[string][]int{}
+		defined := map[int]string{}
+		for i, spec := range specs {
+			pending = append(pending, definition{spec, i})
+			batch[spec.Name] = append(batch[spec.Name], i)
+		}
 		for len(pending) > 0 {
 			progress := false
-			next := []Spec{}
-			for _, spec := range pending {
+			next := []definition{}
+			for _, item := range pending {
+				spec := item.Spec
 				if strings.TrimSpace(spec.Name) == "" {
 					return errors.New("lane name must not be empty")
 				}
 				if spec.Parent != "" {
-					p, e := resolve(visible(*rows), spec.Parent)
-					if e != nil {
-						next = append(next, spec)
-						continue
+					if indices, ok := batch[spec.Parent]; ok {
+						if len(indices) != 1 {
+							return fmt.Errorf("define: ambiguous batch parent %q", spec.Parent)
+						}
+						id, ready := defined[indices[0]]
+						if !ready {
+							next = append(next, item)
+							continue
+						}
+						spec.Parent = id
+					} else {
+						p, e := resolveExact(visible(*rows), spec.Parent)
+						if e != nil {
+							return e
+						}
+						spec.Parent = p.ID
 					}
-					spec.Parent = p.ID
 				}
 				index := -1
 				for i, q := range *rows {
@@ -122,6 +144,7 @@ func (s *Store) Define(specs []Spec) (out []Lane, err error) {
 						return e
 					}
 					out = append(out, q)
+					defined[item.Index] = q.ID
 				} else {
 					q := &(*rows)[index]
 					before := q.Spec
@@ -144,6 +167,7 @@ func (s *Store) Define(specs []Spec) (out []Lane, err error) {
 						s.entry(q, "edit", "", "", "define", nil, nil)
 					}
 					out = append(out, *q)
+					defined[item.Index] = q.ID
 				}
 				progress = true
 			}
@@ -278,6 +302,14 @@ func paneKey(a, b Pane) bool {
 	}
 	return samePane(a, b)
 }
+
+// A query's empty host/session are wildcards on both relation views.
+func paneMatches(stored, query Pane) bool {
+	if query.Window != "" {
+		return stored.Window == query.Window && (query.Session == "" || stored.Session == query.Session) && (query.Host == "" || stored.Host == query.Host)
+	}
+	return paneKey(stored, query)
+}
 func (s *Store) associate(q *Lane, p Pane, remove bool) {
 	kind := "associate"
 	if p.Role == "" {
@@ -287,10 +319,7 @@ func (s *Store) associate(q *Lane, p Pane, remove bool) {
 	if remove {
 		kind = "unassociate"
 		q.Panes = slices.DeleteFunc(q.Panes, func(old Pane) bool {
-			if p.Window != "" {
-				return old.Window == p.Window && (p.Session == "" || old.Session == p.Session) && (p.Host == "" || old.Host == p.Host)
-			}
-			return paneKey(old, p)
+			return paneMatches(old, p)
 		})
 	} else {
 		found := false
@@ -315,9 +344,26 @@ func (s *Store) Associate(target string, p Pane, remove bool) (Lane, error) {
 	}
 	return s.mutate(action, target, func(q *Lane, _ *[]Lane) error { s.associate(q, p, remove); return nil })
 }
+func (s *Store) preset(q *Lane, verb, note string) error {
+	table := s.StatePresets
+	if table == nil {
+		_ = json.Unmarshal([]byte(defaultStatePresets), &table)
+	}
+	state, ok := table[verb]
+	if !ok || state == "" {
+		return fmt.Errorf("lanes.state-presets: preset %q is not configured", verb)
+	}
+	if _, ok := s.states()[state]; !ok {
+		return fmt.Errorf("lanes.state-presets: preset %q names %q, which is absent from lanes.states", verb, state)
+	}
+	return s.state(q, state, note)
+}
+func (s *Store) Preset(target, verb, note string) (Lane, error) {
+	return s.mutate("state", target, func(q *Lane, _ *[]Lane) error { return s.preset(q, verb, note) })
+}
 func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, error) {
 	return s.mutate("start", target, func(q *Lane, _ *[]Lane) error {
-		if e := s.state(q, "running", ""); e != nil {
+		if e := s.preset(q, "start", ""); e != nil {
 			return e
 		}
 		if branch != "" {
@@ -335,7 +381,7 @@ func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, err
 }
 func (s *Store) Merge(target, commit, note string) (Lane, error) {
 	return s.mutate("merge", target, func(q *Lane, _ *[]Lane) error {
-		if e := s.state(q, "merged", note); e != nil {
+		if e := s.preset(q, "merge", note); e != nil {
 			return e
 		}
 		if commit != "" {

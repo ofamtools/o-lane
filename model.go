@@ -36,16 +36,22 @@ type Pane struct {
 	Agent   string    `json:"agent,omitempty"`
 	Since   time.Time `json:"since"`
 }
+type UndoRecord struct {
+	Action        string   `json:"action"`
+	OriginalActor Actor    `json:"original_actor"`
+	Entries       []string `json:"entries"`
+}
 type Entry struct {
-	ID    string    `json:"id"`
-	At    time.Time `json:"at"`
-	By    Actor     `json:"by"`
-	Kind  string    `json:"kind"`
-	From  string    `json:"from,omitempty"`
-	To    string    `json:"to,omitempty"`
-	Text  string    `json:"text,omitempty"`
-	Links []Link    `json:"links,omitempty"`
-	Pane  *Pane     `json:"pane,omitempty"`
+	Undo  *UndoRecord `json:"undo,omitempty"`
+	ID    string      `json:"id"`
+	At    time.Time   `json:"at"`
+	By    Actor       `json:"by"`
+	Kind  string      `json:"kind"`
+	From  string      `json:"from,omitempty"`
+	To    string      `json:"to,omitempty"`
+	Text  string      `json:"text,omitempty"`
+	Links []Link      `json:"links,omitempty"`
+	Pane  *Pane       `json:"pane,omitempty"`
 }
 type Spec struct {
 	Name     string   `json:"name"`
@@ -90,7 +96,7 @@ func (s *Store) view(q Lane, rows []Lane) View {
 			v.Association = "associated"
 		}
 	}
-	for _, e := range q.History {
+	for _, e := range activeHistory(q.History) {
 		st, ok := s.states()[e.To]
 		if !ok || (e.Kind != "state" && e.Kind != "create") {
 			continue
@@ -101,6 +107,8 @@ func (s *Store) view(q Lane, rows []Lane) View {
 		}
 		if st.Ends {
 			v.Finished = &at
+		} else {
+			v.Finished = nil
 		}
 	}
 	// A homogeneous subtree has that state. Mixed children use the first
@@ -176,4 +184,24 @@ func descendant(rows []Lane, id, parent string) bool {
 		id = next
 	}
 	return false
+}
+
+// Undo appends a receipt instead of removing events. Derived values read only
+// the effective entries; the complete audit remains available to the owner.
+func activeHistory(history []Entry) []Entry {
+	undone := map[string]bool{}
+	for _, en := range history {
+		if en.Undo != nil {
+			for _, id := range en.Undo.Entries {
+				undone[id] = true
+			}
+		}
+	}
+	out := []Entry{}
+	for _, en := range history {
+		if en.Kind != "undo" && !undone[en.ID] {
+			out = append(out, en)
+		}
+	}
+	return out
 }

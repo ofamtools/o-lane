@@ -18,21 +18,28 @@ import (
 // The o-questions lock/snapshot/WAL pattern, with one file per root tree.
 // A transaction includes its undo receipt, so recovery cannot lose undo state.
 type Store struct {
-	Dir         string
-	Actor       Actor
-	Now         func() time.Time
-	States      []State
-	BackupDaily bool
-	BackupKeep  int
-	Permit      func(string) error
-	Remove      func(string) error
+	Dir          string
+	Actor        Actor
+	Now          func() time.Time
+	States       []State
+	StatePresets map[string]string
+	Warn         func(string)
+	BackupDaily  bool
+	BackupKeep   int
+	Permit       func(string) error
+	Remove       func(string) error
+}
+type UndoChange struct {
+	ID      string   `json:"id"`
+	Entries []string `json:"entries"`
 }
 type Snapshot struct {
-	Rows   []Lane    `json:"rows"`
-	At     time.Time `json:"at"`
-	Action string    `json:"action"`
-	By     Actor     `json:"by"`
-	Undone bool      `json:"undone"`
+	Changes []UndoChange `json:"changes,omitempty"`
+	Rows    []Lane       `json:"rows"`
+	At      time.Time    `json:"at"`
+	Action  string       `json:"action"`
+	By      Actor        `json:"by"`
+	Undone  bool         `json:"undone"`
 }
 type transaction struct {
 	Writes map[string]json.RawMessage `json:"writes"`
@@ -65,11 +72,28 @@ func (s *Store) states() map[string]State {
 	return out
 }
 func (s *Store) locked(fn func() error) error {
-	if err := os.MkdirAll(s.Dir, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.Dir), 0700); err != nil {
 		return err
 	}
-	if err := os.Chmod(s.Dir, 0700); err != nil {
-		return err
+	if err := os.Mkdir(s.Dir, 0700); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		info, e := os.Stat(s.Dir)
+		if e != nil {
+			return e
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("data path %s is not a directory", s.Dir)
+		}
+		if info.Mode().Perm()&0077 != 0 {
+			warning := fmt.Sprintf("warning: data directory %s has permissions %04o; expected 0700; left unchanged", s.Dir, info.Mode().Perm())
+			if s.Warn != nil {
+				s.Warn(warning)
+			} else {
+				fmt.Fprintln(os.Stderr, warning)
+			}
+		}
 	}
 	for _, d := range []string{"roots", ".history"} {
 		if err := os.MkdirAll(filepath.Join(s.Dir, d), 0700); err != nil {
@@ -214,7 +238,11 @@ func visible(rows []Lane) []Lane {
 	}
 	return out
 }
-func resolve(rows []Lane, target string) (Lane, error) {
+func resolve(rows []Lane, target string) (Lane, error) { return resolveMatches(rows, target, true) }
+func resolveExact(rows []Lane, target string) (Lane, error) {
+	return resolveMatches(rows, target, false)
+}
+func resolveMatches(rows []Lane, target string, prefix bool) (Lane, error) {
 	target = strings.TrimPrefix(target, "lane/")
 	for _, q := range rows {
 		if q.ID == target {
@@ -227,7 +255,7 @@ func resolve(rows []Lane, target string) (Lane, error) {
 			matches = append(matches, q)
 		}
 	}
-	if len(matches) == 0 && target != "" {
+	if prefix && len(matches) == 0 && target != "" {
 		for _, q := range rows {
 			if strings.HasPrefix(q.ID, target) {
 				matches = append(matches, q)
@@ -242,10 +270,11 @@ func resolve(rows []Lane, target string) (Lane, error) {
 	}
 	return Lane{}, fmt.Errorf("lane %q not found", target)
 }
-func (s *Store) List() (out []Lane, err error) {
-	err = s.locked(func() error { rows, e := s.all(); out = visible(rows); return e })
+func (s *Store) ListAll() (out []Lane, err error) {
+	err = s.locked(func() error { var e error; out, e = s.all(); return e })
 	return
 }
+func (s *Store) List() ([]Lane, error) { rows, e := s.ListAll(); return visible(rows), e }
 func (s *Store) Resolve(target string) (Lane, error) {
 	rows, e := s.List()
 	if e != nil {
@@ -280,7 +309,7 @@ func (s *Store) commit(before, after []Lane, action string) error {
 		}
 		next = n + 1
 	}
-	b, e := json.Marshal(Snapshot{Rows: before, At: s.now(), Action: action, By: s.Actor})
+	b, e := json.Marshal(Snapshot{Rows: before, At: s.now(), Action: action, By: s.Actor, Changes: changedLanes(before, after)})
 	if e != nil {
 		return e
 	}
@@ -353,13 +382,82 @@ func (s *Store) Undo() error {
 			if s.Actor.IsAgent() && !s.Actor.SameAgent(snap.By) {
 				return errors.New("undo refused (history.own-entry): the latest change belongs to another actor")
 			}
+			current, e := s.all()
+			if e != nil {
+				return e
+			}
+			changes := snap.Changes
+			if changes == nil {
+				changes = changedLanes(snap.Rows, current)
+			}
+			restored := restoreWithAudit(s, current, snap, changes)
 			snap.Undone = true
 			b, e = json.Marshal(snap)
 			if e != nil {
 				return e
 			}
-			return s.write(snap.Rows, map[string]json.RawMessage{".history/" + filepath.Base(files[i]): b})
+			return s.write(restored, map[string]json.RawMessage{".history/" + filepath.Base(files[i]): b})
 		}
 		return errors.New("nothing to undo")
 	})
+}
+
+// Snapshot receipts name affected lanes and entries. Effective-history
+// comparison also supports snapshots written before receipts were introduced.
+func changedLanes(before, after []Lane) []UndoChange {
+	old := map[string]Lane{}
+	for _, q := range before {
+		old[q.ID] = q
+	}
+	out := []UndoChange{}
+	for _, q := range after {
+		prior, exists := old[q.ID]
+		a, b := prior, q
+		a.Updated = time.Time{}
+		b.Updated = time.Time{}
+		a.History = activeHistory(a.History)
+		b.History = activeHistory(b.History)
+		if exists && reflect.DeepEqual(a, b) {
+			continue
+		}
+		known := map[string]bool{}
+		for _, en := range prior.History {
+			known[en.ID] = true
+		}
+		change := UndoChange{ID: q.ID, Entries: []string{}}
+		for _, en := range q.History {
+			if en.Kind != "undo" && !known[en.ID] {
+				change.Entries = append(change.Entries, en.ID)
+			}
+		}
+		out = append(out, change)
+	}
+	return out
+}
+func restoreWithAudit(s *Store, current []Lane, snap Snapshot, changes []UndoChange) []Lane {
+	old := map[string]Lane{}
+	for _, q := range snap.Rows {
+		old[q.ID] = q
+	}
+	affected := map[string]UndoChange{}
+	for _, c := range changes {
+		affected[c.ID] = c
+	}
+	out := clone(current)
+	for i, q := range out {
+		change, ok := affected[q.ID]
+		if !ok {
+			continue
+		}
+		restored, exists := old[q.ID]
+		if !exists {
+			restored = q
+			restored.Deleted = true
+		}
+		restored.History = q.History
+		s.entry(&restored, "undo", q.State, restored.State, "Undid "+snap.Action, nil, nil)
+		restored.History[len(restored.History)-1].Undo = &UndoRecord{Action: snap.Action, OriginalActor: snap.By, Entries: change.Entries}
+		out[i] = restored
+	}
+	return out
 }

@@ -3,21 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func fixture(t *testing.T) string {
 	t.Helper()
-	if err := os.MkdirAll("/tmp/o-lane-core", 0700); err != nil {
-		t.Fatal(err)
+	base := t.TempDir()
+	for _, k := range []string{"TUIOS_SESSION", "TUIOS_PANE_ID", "TUIOS_HARNESS", "TUIOS_AGENT_NAME", "AGENT_HARNESS", "AGENT_MODEL", "OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "OCHAZUKE_MODEL", "O_LANE_ACTOR", "CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"} {
+		t.Setenv(k, "")
 	}
-	base, err := os.MkdirTemp("/tmp/o-lane-core/", "test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(base) })
 	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"} {
 		t.Setenv(k, filepath.Join(base, k))
 	}

@@ -107,7 +107,7 @@ func TestCLIVerbs(t *testing.T) {
 	if copied["state"] != "planned" {
 		t.Fatal(copied)
 	}
-	f.lane("start", "child", "--pane", "w1", "--session", "s", "--branch", "branch", "--worktree", "/tmp/o-lane-core/wt", "--harness", "test")
+	f.lane("start", "child", "--pane", "w1", "--session", "s", "--branch", "branch", "--worktree", filepath.Join(f.dir, "wt"), "--harness", "test")
 	f.lane("associate", "child", "w2", "--session", "s", "--role", "reviewer")
 	if got := f.lane("live", "root")["state"]; got != "needs input" {
 		t.Fatal(got)
@@ -133,8 +133,8 @@ func TestCLIVerbs(t *testing.T) {
 	f.call("pane", "unassociate", "w2", "child", "--session", "s")
 	f.lane("associate", "child") // no pane is recordable and unassociated
 	f.lane("note", "child", "a note")
-	f.lane("link", "child", "report", "/tmp/o-lane-core/report.md")
-	f.lane("unlink", "child", "report", "/tmp/o-lane-core/report.md")
+	f.lane("link", "child", "report", filepath.Join(f.dir, "report.md"))
+	f.lane("unlink", "child", "report", filepath.Join(f.dir, "report.md"))
 	for _, verb := range []string{"park", "review", "merge", "finish", "cancel", "reopen"} {
 		args := []string{verb, "child"}
 		if verb == "merge" {
@@ -149,13 +149,13 @@ func TestCLIVerbs(t *testing.T) {
 	f.call("lane", "list")
 	f.call("lane", "tree", "--open")
 	shown := f.lane("show", "child")
-	if shown["state"] != "review" || shown["started"] == nil || shown["finished"] == nil {
+	if shown["state"] != "review" || shown["started"] == nil || shown["finished"] != nil {
 		t.Fatal(shown)
 	}
 	if got := f.call("lane", "yank-id", "child"); got != "child" {
 		t.Fatal(got)
 	}
-	if got := f.call("lane", "yank-path", "child"); got != "/tmp/o-lane-core/wt" {
+	if got := f.call("lane", "yank-path", "child"); got != filepath.Join(f.dir, "wt") {
 		t.Fatal(got)
 	}
 	f.lane("delete", "retry")
@@ -218,7 +218,7 @@ func TestCLIActorEnv(t *testing.T) {
 		env           map[string]string
 		kind, harness string
 	}{
-		{map[string]string{}, "owner", ""}, {map[string]string{"TUIOS_PANE_ID": "pane"}, "owner", ""}, {map[string]string{"CODEX_THREAD_ID": "id", "TUIOS_PANE_ID": "pane"}, "agent", "codex"}, {map[string]string{"CLAUDE_CODE_ENTRYPOINT": "cli"}, "agent", "claude-code"}, {map[string]string{"OCHAZUKE_ACTOR": "owner", "AGENT_HARNESS": "codex"}, "owner", ""},
+		{map[string]string{}, "owner", ""}, {map[string]string{"TUIOS_PANE_ID": "pane"}, "owner", ""}, {map[string]string{"CODEX_THREAD_ID": "id", "TUIOS_PANE_ID": "pane"}, "agent", "codex"}, {map[string]string{"CLAUDE_CODE_ENTRYPOINT": "cli"}, "agent", "claude-code"}, {map[string]string{"OCHAZUKE_ACTOR": "owner", "AGENT_HARNESS": "codex"}, "agent", "codex"},
 	} {
 		a, e := cliActor(func(k string) string { return tc.env[k] })
 		if e != nil || a.Kind != tc.kind || a.Harness != tc.harness {
