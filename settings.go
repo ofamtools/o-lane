@@ -1,12 +1,26 @@
 package main
 
-import "github.com/unixsuperhero/ochazuke"
+import (
+	"fmt"
+	"github.com/unixsuperhero/ochazuke"
+)
 
 const defaultStates = `[{"name":"planned","tone":"dim","open":true},{"name":"running","tone":"state.working","starts":true,"open":true},{"name":"parked","tone":"dim","open":true},{"name":"review","tone":"accent","open":true},{"name":"merged","tone":"state.done","ends":true},{"name":"done","tone":"state.done","ends":true},{"name":"cancelled","tone":"dim","ends":true}]`
 
 func appSettings() []ochazuke.Setting {
 	rows := []ochazuke.Setting{
-		{Name: "lanes.states", Type: ochazuke.SettingString, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open"},
+		{Name: "lanes.link-kinds", Type: ochazuke.SettingList, Default: []string{"commit", "pr", "report", "question", "plan", "task", "url", "retry-of"}, Description: "Link kinds accepted by link/unlink"},
+		{Name: "lanes.import-columns", Type: ochazuke.SettingString, Default: `{"lane":"name","scope":"scope","repo":"repo","depends on":"depends","estimate":"estimate","est.":"estimate","lane time":"estimate","agent time":"estimate","done when":"done_when","tests and stories":"tests"}`, Description: "Reserved for L3/L6: generic markdown-table column mapping"},
+		{Name: "lanes.import-results", Type: ochazuke.SettingString, Default: `{"merged":"merged","shipped":"merged","running":"running","parked":"parked","stopped":"cancelled","on hold":"cancelled","report only":"done"}`, Description: "Reserved for L6: imported result to state mapping"},
+
+		{Name: "lanes.states", Type: ochazuke.SettingString, Validate: func(v any) error {
+			text, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("expected JSON lifecycle rows")
+			}
+			_, e := parseStates(text)
+			return e
+		}, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open"},
 		{Name: "lanes.pane-roles", Type: ochazuke.SettingList, Default: []string{"implementer", "reviewer", "watcher", "coordinator"}, Description: "Pane roles"},
 		{Name: "lanes.tag-states", Type: ochazuke.SettingString, Default: `{"LANE-DONE":"review"}`, Description: "JSON tag to lifecycle state map; unmapped tags append notes"},
 		{Name: "lanes.plans-dir", Type: ochazuke.SettingString, Default: "", Description: "Optional plan directory; unset by default"},

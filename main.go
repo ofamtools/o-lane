@@ -66,8 +66,12 @@ func Main(args []string, in io.Reader, out, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
+	return dispatch(a, args)
+}
+
+func dispatch(a *App, args []string) error {
 	sh := a.shell()
-	app := oden.New("o-lane", args, oden.WithBuiltins(), oden.WithStdio(in, out, errOut))
+	app := oden.New("o-lane", args, oden.WithBuiltins(), oden.WithStdio(a.in, a.out, a.errOut))
 	ocli.Mount(app, sh)
 	return app.Run(context.Background())
 }
