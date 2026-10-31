@@ -1,0 +1,69 @@
+{
+  "name": "lanes/filter-state",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Other root"
+      },
+      {
+        "name": "Release root"
+      },
+      {
+        "name": "Build step",
+        "parent": "Release root"
+      },
+      {
+        "name": "Docs step",
+        "parent": "Release root"
+      }
+    ],
+    "start": "Build step"
+  },
+  "script": [
+    "z",
+    "/",
+    {
+      "type": "status"
+    },
+    "enter",
+    {
+      "type": "running"
+    },
+    "enter"
+  ],
+  "expect": [
+    {
+      "after": 1,
+      "contains": [
+        "Other root",
+        "Release root",
+        "Build step",
+        "Docs step"
+      ]
+    },
+    {
+      "after": 4,
+      "contains": [
+        "running"
+      ]
+    },
+    {
+      "after": 6,
+      "modal": "",
+      "contains": [
+        "[status = running]"
+      ],
+      "order": [
+        "Release root",
+        "Build step"
+      ],
+      "lacks": [
+        "Other root",
+        "Docs step"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,8 @@
 
 - `main.go`: XDG data path, global `--data`, oden dispatch and ochazuke CLI mount.
 - `app.go`: catalog verbs, explicit app nouns, shared relation dispatch, transport-bound actors, settings configuration and target reveal.
-- `props.go`: framework standard typed `get`/`set` over the lane store.
+- `props.go`: framework standard typed `get`/`set` over the lane store, read-only filter props for prop filters and the default `open` saved filter (kept in step with `lanes.states` by `configure`).
+- `filter.go`, `filter_test.go`: shared `--state` parsing and validation, the tree rule (matches plus ancestors) used by `lane tree`/`lane rows`/`lanes.state-filter`, and row values that make every filter prop present; tests cover CLI `--state`, the setting, page prop filters, saved filters and a skipped hidden-search-text test awaiting ochazuke `ListItem.Search`.
 - `settings.go`: public defaults; lifecycle rows and configurable state presets, roles, links, watcher tags and later page/import/export declarations.
 - `model.go`: specs, lanes, pane refs, links, actor-attributed history; derived lifecycle times, estimates and root rollup.
 - `actor.go`: harness detection, per-run identity, the single framework override and store policy fallback; the app honours framework rights overrides.
@@ -22,7 +23,7 @@
 - `mcp_test.go`: generic framework stdio protocol, transport attribution, dry run, rights refusals and generated harness config.
 - `page.go`: portable tree-page declaration, lifecycle/live word spans, live glyph tones and the name tone matching the state cell, derived duration/pane-role cells, detail sections, binding rows and chooser sources; state and pane chooser entry points share existing domain handlers. The pane chooser discovers sessions/windows through the injectable runner and carries explicit session/window references.
 - `tui.go`: standalone mount, asynchronous replacement row loads and optional refresh timer, reader lifetime/generation/cancellation and live settings projection, plus a cached read-only detail viewer. Rendering reads only cached rows; tree/field/detail layout and keys belong to ochazuke. CLI/smoke/catalog requests start no subscription.
-- `page_test.go`, `cmd/o-story/stories/lanes/*.json`: monogatari fixtures and the four L4, two L8, two project and a name-tone opt-out story, plus tree/catalog mounting, opt-outs, fixed-clock durations, ordering, pane chooser failures, focus and yank checks. Data and identity are isolated; every external command is fake.
+- `page_test.go`, `cmd/o-story/stories/lanes/*.json`: monogatari fixtures and the four L4, two L8, two project, a name-tone opt-out and two status-filter (`filter-state`, `state-filter-setting`) stories, plus tree/catalog mounting, opt-outs, fixed-clock durations, ordering, pane chooser failures, focus and yank checks. Data and identity are isolated; every external command is fake.
 - `Makefile`: bounded Go build/test and coordinator race gate.
 
 The app owns domain state and persistence; released ochazuke owns the CLI, catalog, rights gate and UI. No family-library modifications or local module replacements are required.

@@ -45,6 +45,7 @@ func appSettings() []ochazuke.Setting {
 			return nil
 		}, Description: "Where project completion looks: mtm (default when mtm is on PATH) or none; never required"},
 		{Name: "lanes.project-filter", Type: ochazuke.SettingString, Default: "", Description: "Page shows only subtrees containing this project; empty shows all"},
+		{Name: "lanes.state-filter", Type: ochazuke.SettingList, Default: []string{}, Description: "Page shows only lanes in these lifecycle states, with their ancestors as context; empty shows all"},
 		{Name: "backup.daily", Type: ochazuke.SettingBoolean, Default: true, Description: "Private daily backup before first mutation"},
 		{Name: "backup.keep", Type: ochazuke.SettingInteger, Default: 14, Description: "Daily archives to retain"},
 	}

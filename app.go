@@ -125,6 +125,7 @@ func (a *App) configure() error {
 		return e
 	}
 	a.store.States = states
+	a.refreshOpenFilter()
 	var presets map[string]string
 	if e = json.Unmarshal([]byte(cfg.String("lanes.state-presets")), &presets); e != nil {
 		return fmt.Errorf("lanes.state-presets: %w", e)
@@ -158,8 +159,8 @@ func (a *App) specs() []verbSpec {
 		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false},
 		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false},
 		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true},
-		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "project": projectFilter}, nil, true},
-		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project")}, nil, true},
+		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "project": projectFilter, "state": stateParam("")}, nil, true},
+		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project"), "state": stateParam("ancestors of matches stay as context")}, nil, true},
 		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
 		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true},
 		{"lane", "set", "Set one spec property", common(map[string]ochazuke.Parameter{"prop": required("Property"), "value": required("New value; JSON array for depends")}), []string{"target", "prop", "value"}, false},
@@ -202,7 +203,7 @@ func (a *App) specs() []verbSpec {
 			rows = append(rows, verbSpec{noun, verb, desc, m, pos, false})
 		}
 	}
-	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference")}, []string{"project"}, true})
+	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "state": stateParam("")}, []string{"project"}, true})
 	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true})
 	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true})
 	return rows
@@ -281,6 +282,16 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		}
 	}
 	project := str("project")
+	// --state filters only the listing verbs; lane.state's own state
+	// argument is the state to record.
+	var states []string
+	if (noun == "project" && verb == "lanes") || (noun == "lane" && (verb == "list" || verb == "tree")) {
+		states = stateList(c.Args["state"])
+		if e := s.checkStates(states); e != nil {
+			return done(nil, e)
+		}
+	}
+	inStates := func(q Lane) bool { return len(states) == 0 || slices.Contains(states, q.State) }
 	if noun == "project" {
 		switch verb {
 		case "lanes":
@@ -290,7 +301,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			}
 			out := []View{}
 			for _, q := range rows {
-				if v := s.view(q, rows); projectMatches(v.EffectiveProject, project) {
+				if v := s.view(q, rows); projectMatches(v.EffectiveProject, project) && inStates(q) {
 					out = append(out, v)
 				}
 			}
@@ -336,7 +347,10 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			return done(nil, e)
 		}
 		out := []View{}
-		inProject := func(q Lane) bool { return project == "" || subtreeProject(rows, q, project) }
+		kept := stateKept(rows, states)
+		inProject := func(q Lane) bool {
+			return (project == "" || subtreeProject(rows, q, project)) && (kept == nil || kept[q.ID])
+		}
 		var walk func(string, bool)
 		walk = func(parent string, hide bool) {
 			for _, q := range rows {
@@ -367,7 +381,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			}
 			for _, q := range rows {
 				v := s.view(q, rows)
-				if (parent == "" || q.Parent == parent) && (project == "" || projectMatches(v.EffectiveProject, project)) {
+				if (parent == "" || q.Parent == parent) && (project == "" || projectMatches(v.EffectiveProject, project)) && inStates(q) {
 					out = append(out, v)
 				}
 			}

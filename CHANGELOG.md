@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Filter lanes by status: lane rows declare read-only filter props (`status`, `rolled_state`, `live_state`, `effective_project`, `created`/`updated`/`started`/`finished`, `pane_count`, plus `name` and `parent`) so ochazuke's `z /` prop filters and saved filters work on the Lanes page; a default `open` saved filter follows `lanes.states`. `--state` (comma list) on `lane list`, `lane tree`, `lane rows` and `project lanes`, and a `lanes.state-filter` page setting (default empty, all states). Tree views keep a match's ancestors as context and show a matching lane's children only when they match.
 - Lanes page: the lane name takes the same tone as its state cell (lifecycle tone, or the live tone when live state is shown), from the existing tone data; `lanes.name-tone` (default true) turns it off.
 - Scope lanes to projects: a `project` reference on lanes (inherited from the nearest ancestor), `--project` on lane define/add and plan define, `lane associate/unassociate --project` sharing one handler with `project associate/unassociate`, `project lanes`/`project list`, and `--project` filters on lane list/tree/rows. Records without a project load as unassociated.
 - Lanes page: project column, grouping of roots by project and a project filter (`lanes.project-column`, `lanes.group-by-project`, `lanes.project-filter`). Optional `lanes.project-source` (mtm when installed, else none) completes project names through the injectable runner; it is never required.

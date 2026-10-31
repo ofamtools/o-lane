@@ -68,6 +68,12 @@ func (a *App) registerPage() error {
 		if project := ochazuke.StringArg(c.Args, "project", ""); project != "" {
 			o.project = project
 		}
+		if states := stateList(c.Args["state"]); len(states) > 0 {
+			o.states = states
+		}
+		if e := a.store.checkStates(o.states); e != nil {
+			return done(nil, e)
+		}
 		reader, run := a.reader, commandRunner(a.run)
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
 			if a.rowsLoaded != nil {
@@ -77,7 +83,7 @@ func (a *App) registerPage() error {
 		})
 	}, "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	rowsOp := a.r.Operations["lane.rows"]
-	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter")}
+	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter")}
 	a.r.Operations[rowsOp.Key()] = rowsOp
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
@@ -103,12 +109,13 @@ type pageOptions struct {
 	liveRows                                                           map[string]Live
 	groupProjects, projectColumn, nameTone                             bool
 	project                                                            string
+	states                                                             []string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), project: cfg.String("lanes.project-filter")}
+	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter")}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -216,6 +223,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 		})
 	}
 	out := []ocli.Row{}
+	kept := stateKept(lanes, o.states)
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -223,6 +231,9 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				continue
 			}
 			if o.project != "" && !subtreeProject(lanes, q, o.project) {
+				continue
+			}
+			if kept != nil && !kept[q.ID] {
 				continue
 			}
 			v := s.view(q, lanes)
@@ -312,6 +323,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				data["live"] = live
 				data["live_state"] = live.State
 			}
+			laneFilterValues(data, q)
 			data["pane_detail"] = strings.Join(paneDetail, "\n")
 			if len(paneDetail) == 0 {
 				data["pane_detail"] = "unassociated"

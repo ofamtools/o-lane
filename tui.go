@@ -75,7 +75,7 @@ func mountPage(a *App) (*page, error) {
 			a.r.UI().Status(err.Error())
 		}
 	}
-	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.live-tones", "lanes.live-states", "lanes.live-precedence", "lanes.live-roles"} {
+	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.live-tones", "lanes.live-states", "lanes.live-precedence", "lanes.live-roles", "lanes.project-filter", "lanes.state-filter"} {
 		a.r.Settings().Observe(name, func(string, any) { p.dirty = true })
 	}
 	a.showUI = func(q View) error {
