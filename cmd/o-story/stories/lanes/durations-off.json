@@ -1,0 +1,6 @@
+{
+ "name":"lanes/durations-off", "app":"o-lane", "width":150, "height":38,
+ "values":{"lanes.durations":false},
+ "seed":{"lanes":[{"name":"Implementation"}],"start":"Implementation"},
+ "expect":{"contains":["Implementation","running"],"lacks":["Elapsed / duration","1h 30m"]}
+}

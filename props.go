@@ -46,6 +46,9 @@ func (a *App) declareProps() {
 			if e != nil {
 				return nil, e
 			}
+			if a.changed != nil {
+				a.changed()
+			}
 			return ochazuke.ThingOf(q)
 		},
 	})

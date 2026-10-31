@@ -25,6 +25,9 @@ type App struct {
 	in          io.Reader
 	out, errOut io.Writer
 	run         func(context.Context, []string) ([]byte, error)
+	changed     func()
+	showUI      func(View) error
+	rowsLoaded  func([]ocli.Row, error)
 }
 type verbSpec struct {
 	noun, name, description string
@@ -82,6 +85,9 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 			op.HistoryKind = ochazuke.HistoryChange
 		}
 		a.r.Operations[op.Key()] = op
+	}
+	if e = a.registerPage(); e != nil {
+		return nil, e
 	}
 	return a, nil
 }
@@ -197,6 +203,9 @@ func decode(v any, out any) error {
 	return json.Unmarshal(b, out)
 }
 func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
+	if a.changed != nil {
+		defer a.changed()
+	}
 	if e := a.configure(); e != nil {
 		return ochazuke.Failed(e)
 	}
@@ -206,9 +215,28 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 	target := str("target")
 	if target == "" && c.Instance != nil {
 		target = c.Instance.ID
+		if id, ok := c.Instance.Data.(string); ok {
+			target = id
+		}
 		target = strings.TrimPrefix(target, "lane/")
 	}
 	p := Pane{Host: str("host"), Session: str("session"), Window: str("pane"), Role: str("role"), Harness: str("harness"), Model: str("model"), Agent: str("agent")}
+	if noun == "lane" && verb == "choose-state" {
+		verb = "state"
+	}
+	if noun == "lane" && verb == "choose-pane" {
+		// Choice IDs carry the full relation, so equal window labels in
+		// different sessions never lose their session at a mounted host.
+		var e error
+		p, e = paneChoice(p.Window)
+		if e != nil {
+			return done(nil, fmt.Errorf("pane choice: %w", e))
+		}
+		if role := str("role"); role != "" {
+			p.Role = role
+		}
+		verb = "associate"
+	}
 	if p.Session == "" && p.Window != "" {
 		p.Session = s.Actor.Session
 	}
@@ -316,6 +344,11 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			return done(text, e)
 		}
 		rows, e := s.List()
+		if e == nil && a.showUI != nil && a.r.Settings().Bool("lanes.detail") {
+			if e = a.showUI(s.view(q, rows)); e != nil {
+				return done(nil, e)
+			}
+		}
 		return done(s.view(q, rows), e)
 	case "set":
 		q, e := s.Set(target, str("prop"), str("value"))

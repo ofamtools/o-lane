@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/unixsuperhero/ochazuke"
 )
 
@@ -11,6 +13,7 @@ const defaultStatePresets = `{"start":"running","park":"parked","review":"review
 
 func appSettings() []ochazuke.Setting {
 	rows := []ochazuke.Setting{
+		{Name: "lanes.refresh", Type: ochazuke.SettingDuration, Default: 5 * time.Second, Description: "Standalone page refresh interval; zero disables polling"},
 		{Name: "lanes.state-presets", Type: ochazuke.SettingString, Default: defaultStatePresets, Description: "JSON preset verb to lifecycle state map; targets must exist in lanes.states"},
 		{Name: "lanes.link-kinds", Type: ochazuke.SettingList, Default: []string{"commit", "pr", "report", "question", "plan", "task", "url", "retry-of"}, Description: "Link kinds accepted by link/unlink"},
 		{Name: "lanes.import-columns", Type: ochazuke.SettingString, Default: defaultImportColumns, Validate: func(v any) error { _, e := parseImportColumns(fmt.Sprint(v)); return e }, Description: "JSON markdown header to spec field map; case-insensitive, longest matching header prefix"},
@@ -41,6 +44,7 @@ func appSettings() []ochazuke.Setting {
 		value bool
 		desc  string
 	}{
+		{"lanes.tree", true, "Show lane nesting; changes apply on the next page mount"}, {"lanes.state-tones", true, "Colour lifecycle states"}, {"lanes.detail", true, "Show lane detail sections; changes apply on the next page mount"},
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.live-tones", true, "Colour live state"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})

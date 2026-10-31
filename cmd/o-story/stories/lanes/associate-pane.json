@@ -1,0 +1,53 @@
+{
+  "name": "lanes/associate-pane",
+  "app": "o-lane",
+  "width": 150,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation"
+      }
+    ]
+  },
+  "script": [
+    "a",
+    "ctrl+space",
+    {
+      "job": "pane.choices",
+      "state": "done"
+    },
+    {
+      "type": "Worker"
+    },
+    "enter",
+    "enter",
+    {
+      "job": "lane.rows",
+      "state": "done"
+    }
+  ],
+  "expect": [
+    {
+      "after": 1,
+      "contains": [
+        "Run lane.choose-pane",
+        "pane"
+      ]
+    },
+    {
+      "after": 3,
+      "contains": [
+        "Worker",
+        "fixture-session"
+      ]
+    },
+    {
+      "after": 7,
+      "contains": [
+        "implementer"
+      ],
+      "modal": ""
+    }
+  ]
+}

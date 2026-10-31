@@ -1,0 +1,42 @@
+{
+  "name": "lanes/state-change",
+  "app": "o-lane",
+  "width": 140,
+  "height": 38,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation"
+      }
+    ]
+  },
+  "script": [
+    "s",
+    "enter",
+    {
+      "type": "running"
+    },
+    "enter",
+    "enter",
+    {
+      "job": "lane.rows",
+      "state": "done"
+    }
+  ],
+  "expect": [
+    {
+      "after": 1,
+      "contains": [
+        "Run lane.choose-state",
+        "state"
+      ]
+    },
+    {
+      "after": 6,
+      "contains": [
+        "running"
+      ],
+      "modal": ""
+    }
+  ]
+}

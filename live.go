@@ -24,18 +24,26 @@ type windowState struct {
 	Window string `json:"window_id"`
 	State  string `json:"agent_state"`
 }
+type commandRunner func(context.Context, []string) ([]byte, error)
+type liveOptions struct {
+	on                bool
+	mapping           map[string]string
+	roles, precedence []string
+}
 
-// The CLI snapshot needs no daemon client or subscription. The runner is
-// injectable; tests never connect to a user's tuios or drive a real pane.
-func (a *App) live(q Lane) (Live, error) {
-	out := Live{State: "unassociated", Panes: []LivePane{}}
-	if !a.r.Settings().Bool("lanes.live") {
-		out.State = "off"
-		return out, nil
+func (a *App) liveOptions() (liveOptions, error) {
+	cfg := a.r.Settings()
+	o := liveOptions{on: cfg.Bool("lanes.live"), roles: cfg.Strings("lanes.live-roles"), precedence: cfg.Strings("lanes.live-precedence"), mapping: map[string]string{}}
+	if !o.on {
+		return o, nil
 	}
+	e := json.Unmarshal([]byte(cfg.String("lanes.live-states")), &o.mapping)
+	return o, e
+}
+func (a *App) associatedPanes(q Lane) ([]Pane, error) {
 	rows, e := a.store.List()
 	if e != nil {
-		return out, e
+		return nil, e
 	}
 	panes := []Pane{}
 	for _, row := range rows {
@@ -43,19 +51,39 @@ func (a *App) live(q Lane) (Live, error) {
 			panes = append(panes, row.Panes...)
 		}
 	}
-	mapping := map[string]string{}
-	if e = json.Unmarshal([]byte(a.r.Settings().String("lanes.live-states")), &mapping); e != nil {
-		return out, e
+	return panes, nil
+}
+
+// Snapshot options on the loop; command work consumes only values and an
+// injectable runner. Neither live reads nor focus persist derived state.
+func (a *App) live(q Lane) (Live, error) {
+	o, e := a.liveOptions()
+	if e != nil {
+		return Live{}, e
+	}
+	if !o.on {
+		return Live{State: "off", Panes: []LivePane{}}, nil
+	}
+	panes, e := a.associatedPanes(q)
+	if e != nil {
+		return Live{}, e
+	}
+	return readLive(context.Background(), panes, o, a.run)
+}
+func readLive(parent context.Context, panes []Pane, o liveOptions, run commandRunner) (Live, error) {
+	out := Live{State: "unassociated", Panes: []LivePane{}}
+	if !o.on {
+		out.State = "off"
+		return out, nil
 	}
 	type snapshot struct {
 		windows map[string]string
 		err     error
 	}
 	snapshots := map[string]snapshot{}
-	roles := a.r.Settings().Strings("lanes.live-roles")
 	states := map[string]bool{}
 	for _, p := range panes {
-		if len(roles) > 0 && !slices.Contains(roles, p.Role) {
+		if len(o.roles) > 0 && !slices.Contains(o.roles, p.Role) {
 			continue
 		}
 		item := LivePane{Pane: p, State: "unassociated"}
@@ -64,7 +92,6 @@ func (a *App) live(q Lane) (Live, error) {
 			snap, ok := snapshots[key]
 			if !ok {
 				snap.windows = map[string]string{}
-				// An explicit session is required: never fall back to the focused pane.
 				if p.Session == "" {
 					snap.err = errors.New("pane session is unassociated")
 				} else {
@@ -73,8 +100,8 @@ func (a *App) live(q Lane) (Live, error) {
 						b, _ := json.Marshal(map[string]string{"host": p.Host, "session": p.Session})
 						argv = []string{"tuios", "call", "list-windows", string(b)}
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					b, err := a.run(ctx, argv)
+					ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+					b, err := run(ctx, argv)
 					cancel()
 					snap.err = err
 					if err == nil {
@@ -93,7 +120,7 @@ func (a *App) live(q Lane) (Live, error) {
 				item.State = "unknown"
 				item.Error = snap.err.Error()
 			} else if raw, ok := snap.windows[p.Window]; ok {
-				item.State = mapping[raw]
+				item.State = o.mapping[raw]
 				if item.State == "" {
 					if raw == "" {
 						item.State = "shell"
@@ -102,7 +129,7 @@ func (a *App) live(q Lane) (Live, error) {
 					}
 				}
 			} else {
-				item.State = mapping["closed"]
+				item.State = o.mapping["closed"]
 				if item.State == "" {
 					item.State = "closed"
 				}
@@ -111,8 +138,7 @@ func (a *App) live(q Lane) (Live, error) {
 		out.Panes = append(out.Panes, item)
 		states[item.State] = true
 	}
-	out.State = "unassociated"
-	for _, name := range a.r.Settings().Strings("lanes.live-precedence") {
+	for _, name := range o.precedence {
 		if states[name] {
 			out.State = name
 			return out, nil
@@ -131,44 +157,58 @@ func (a *App) liveResult(_ ochazuke.Ctx, q Lane) ochazuke.Result {
 	return done(v, e)
 }
 func (a *App) focusPane(c ochazuke.Ctx, q Lane, role string) ochazuke.Result {
-	// MCP is headless. Agent focus requires a live UI host (L4), while an
-	// owner's explicit CLI command may use the configured external opener.
-	if c.Actor().IsAgent() {
+	if c.Actor().IsAgent() && a.showUI == nil {
 		return done(nil, errors.New("focus-pane needs a live UI (agents.live-only)"))
 	}
-	live, e := a.live(q)
+	panes, e := a.associatedPanes(q)
 	if e != nil {
 		return done(nil, e)
 	}
-	candidates := []LivePane{}
-	for _, p := range live.Panes {
-		if p.Window != "" && p.Session != "" && (role == "" || p.Role == role) {
-			candidates = append(candidates, p)
-		}
-	}
-	if len(candidates) == 0 {
-		return done(nil, errors.New("lane is unassociated; associate a pane with a session first"))
-	}
-	selected := candidates[0]
-	for _, p := range candidates {
-		if p.Role == "implementer" {
-			selected = p
-			break
-		}
-	}
-	for _, p := range candidates {
-		if p.State == live.State {
-			selected = p
-			break
-		}
+	o, e := a.liveOptions()
+	if e != nil {
+		return done(nil, e)
 	}
 	argv := append([]string{}, a.r.Settings().Strings("lanes.pane-open")...)
-	replace := strings.NewReplacer("{session}", selected.Session, "{window}", selected.Window, "{host}", selected.Host)
-	for i := range argv {
-		argv[i] = replace.Replace(argv[i])
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, e = a.run(ctx, argv)
-	return done(selected.Pane, e)
+	run := a.run
+	return ochazuke.Pending(func(ctx context.Context) (any, error) {
+		live, e := readLive(ctx, panes, o, run)
+		if e != nil {
+			return nil, e
+		}
+		if !o.on {
+			for _, p := range panes {
+				live.Panes = append(live.Panes, LivePane{Pane: p})
+			}
+		}
+		candidates := []LivePane{}
+		for _, p := range live.Panes {
+			if p.Window != "" && p.Session != "" && (role == "" || p.Role == role) {
+				candidates = append(candidates, p)
+			}
+		}
+		if len(candidates) == 0 {
+			return nil, errors.New("lane is unassociated; associate a pane with a session first")
+		}
+		selected := candidates[0]
+		for _, p := range candidates {
+			if p.Role == "implementer" {
+				selected = p
+				break
+			}
+		}
+		for _, p := range candidates {
+			if p.State == live.State {
+				selected = p
+				break
+			}
+		}
+		replace := strings.NewReplacer("{session}", selected.Session, "{window}", selected.Window, "{host}", selected.Host)
+		for i := range argv {
+			argv[i] = replace.Replace(argv[i])
+		}
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		_, e = run(ctx, argv)
+		return selected.Pane, e
+	})
 }

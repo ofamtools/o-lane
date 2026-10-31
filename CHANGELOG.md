@@ -4,6 +4,9 @@
 
 - Define lanes from Markdown plan tables, with configurable column mappings, portable plan lookup, plan.define/plan.lanes and read-only directory parsing reports.
 - Preserve explicit empty JSON/table updates and reject duplicate definitions while keeping exact-name re-definition idempotent, actor-attributed and undoable.
+- Add the standalone and portable Lanes tree page with configurable lifecycle tones, derived durations, pane-role/agent columns, Markdown/fields/history detail sections and a read-only record viewer.
+- Add catalog binding rows and framework state/pane chooser entry points, using explicit tuios sessions and an injectable runner; existing CLI state/association semantics remain available.
+- Add page opt-outs and optional asynchronous refresh; focus panes off the UI loop and retain recorded-pane focus when live reads are disabled. Add four deterministic monogatari page stories and temporary-data mtm registration verification.
 
 - Scaffold o-lane with an oden/ochazuke catalog shell, XDG data paths and public settings.
 - Add nested lane records, actor-attributed history, configurable states, typed properties, idempotent JSON batches, pane relations, state presets, links, retry copies and CLI snapshot/focus/yank verbs.

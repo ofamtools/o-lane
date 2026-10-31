@@ -1,0 +1,45 @@
+{
+  "name": "lanes/tree",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Project",
+        "wording": "Keep the owner words",
+        "scope": "Build the lane page"
+      },
+      {
+        "name": "Implementation",
+        "parent": "Project"
+      },
+      {
+        "name": "Tests",
+        "parent": "Implementation"
+      }
+    ]
+  },
+  "script": [
+    "j",
+    "j",
+    "k",
+    "k"
+  ],
+  "expect": [
+    {
+      "after": 0,
+      "contains": [
+        "Project",
+        "Implementation",
+        "Tests",
+        "Keep the owner words",
+        "unassociated"
+      ]
+    },
+    {
+      "after": 2,
+      "highlightedText": "Tests"
+    }
+  ]
+}
