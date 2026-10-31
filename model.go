@@ -27,14 +27,19 @@ type Link struct {
 	Label  string `json:"label,omitempty"`
 }
 type Pane struct {
-	Host    string    `json:"host,omitempty"`
-	Session string    `json:"session,omitempty"`
-	Window  string    `json:"window,omitempty"`
-	Role    string    `json:"role"`
-	Harness string    `json:"harness,omitempty"`
-	Model   string    `json:"model,omitempty"`
-	Agent   string    `json:"agent,omitempty"`
-	Since   time.Time `json:"since"`
+	Host    string `json:"host,omitempty"`
+	Session string `json:"session,omitempty"`
+	Window  string `json:"window,omitempty"`
+	Role    string `json:"role"`
+	Harness string `json:"harness,omitempty"`
+	Model   string `json:"model,omitempty"`
+	Agent   string `json:"agent,omitempty"`
+	// AgentID names a harness sub-agent (for example a Claude Code subagent)
+	// whose live state comes from lanes.agent-harnesses; AgentSession is the
+	// harness session it runs in, when known.
+	AgentID      string    `json:"agent_id,omitempty"`
+	AgentSession string    `json:"agent_session,omitempty"`
+	Since        time.Time `json:"since"`
 }
 type UndoRecord struct {
 	Action        string   `json:"action"`
@@ -105,7 +110,7 @@ func (s *Store) view(q Lane, rows []Lane) View {
 		v.ProjectAssociation = "inherited"
 	}
 	for _, p := range q.Panes {
-		if p.Window != "" {
+		if p.Window != "" || p.AgentID != "" {
 			v.Association = "associated"
 		}
 	}

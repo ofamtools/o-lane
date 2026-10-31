@@ -1,0 +1,50 @@
+{
+  "name": "lanes/agent-working",
+  "app": "o-lane",
+  "width": 170,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation",
+        "wording": "assoc them w/ the subagent"
+      },
+      {
+        "name": "Aardvark"
+      }
+    ],
+    "start": "Implementation",
+    "associations": [
+      {
+        "lane": "Implementation",
+        "pane": {
+          "harness": "claude-code",
+          "agent": "ofam-lane",
+          "agent_id": "a3f09c2e71d4b5a68",
+          "agent_session": "sess-1"
+        }
+      }
+    ]
+  },
+  "values": {
+    "lanes.agent-harnesses": "{\"claude-code\":{\"transcripts\":[\"testdata/agents/transcripts/{session}/subagents/agent-{agent}.jsonl\"],\"time_field\":\"timestamp\",\"events\":{\"SubagentStart\":\"start\",\"SubagentStop\":\"stop\"},\"fields\":{\"event\":\"hook_event_name\",\"agent\":\"agent_id\",\"session\":\"session_id\"}}}"
+  },
+  "script": [
+    "j"
+  ],
+  "expect": [
+    {
+      "after": 0,
+      "contains": [
+        "Implementation",
+        "running · working",
+        "ofam-lane a3f09c2e · working 1m"
+      ]
+    },
+    {
+      "after": 1,
+      "highlightedText": "Aardvark"
+    }
+  ],
+  "theme": "dark"
+}

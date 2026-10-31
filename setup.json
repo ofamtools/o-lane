@@ -1,0 +1,26 @@
+[
+  {
+    "id": "claude-subagent-start",
+    "name": "Claude Code subagent hook (start)",
+    "description": "Records each Claude Code subagent start with o-lane agent-hook, so lanes associated with that agent show its live state. Added beside existing SubagentStart entries, never replacing them.",
+    "kind": "json-array",
+    "path": "${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json",
+    "pointer": "/hooks/SubagentStart",
+    "content": "[{\"hooks\":[{\"type\":\"command\",\"command\":\"o-lane agent-hook claude-code\",\"timeout\":5}]}]",
+    "match": {"field": "/hooks/0/command", "contains": "o-lane agent-hook"},
+    "requires": ["dir:${CLAUDE_CONFIG_DIR:-~/.claude}"],
+    "group": "claude-code"
+  },
+  {
+    "id": "claude-subagent-stop",
+    "name": "Claude Code subagent hook (stop)",
+    "description": "Records each Claude Code subagent stop with o-lane agent-hook, so an associated agent shows done. Added beside existing SubagentStop entries, never replacing them.",
+    "kind": "json-array",
+    "path": "${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json",
+    "pointer": "/hooks/SubagentStop",
+    "content": "[{\"hooks\":[{\"type\":\"command\",\"command\":\"o-lane agent-hook claude-code\",\"timeout\":5}]}]",
+    "match": {"field": "/hooks/0/command", "contains": "o-lane agent-hook"},
+    "requires": ["dir:${CLAUDE_CONFIG_DIR:-~/.claude}"],
+    "group": "claude-code"
+  }
+]

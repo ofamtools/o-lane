@@ -129,7 +129,7 @@ func (o pageOptions) columns() []ochazuke.Column {
 	if o.panes {
 		cols = append(cols, ochazuke.Column{Title: "Panes", Max: 28, Priority: 2})
 	}
-	return append(cols, ochazuke.Column{Title: "Agents", Max: 32, Priority: 6})
+	return append(cols, ochazuke.Column{Title: "Agents", Max: 44, Priority: 6})
 }
 func lanePage(o pageOptions) ocli.CatalogPage {
 	p := ocli.CatalogPage{ID: pageID, Title: "Lanes", Layout: ocli.LayoutStack, Lists: []ocli.CatalogList{{ID: listID, Noun: "lane", Source: "lane.rows", Title: "Lanes", Tree: o.tree, Guides: o.guides}}}
@@ -275,22 +275,37 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				if p.Window != "" {
 					roles[p.Role]++
 				}
-				agent := strings.TrimSpace(strings.Join([]string{p.Harness, p.Model, p.Agent}, " "))
-				if agent != "" && !slices.Contains(agents, agent) {
-					agents = append(agents, agent)
-				}
+				agent := strings.Join(slices.DeleteFunc([]string{p.Harness, p.Model, p.Agent, shortAgentID(p.AgentID)}, func(w string) bool { return w == "" }), " ")
 				window := p.Window
 				if window == "" {
 					window = "unassociated"
 				}
-				liveText := ""
+				liveText, agentLive := "", ""
 				if hasLive && o.live.on {
 					for _, lp := range live.Panes {
 						if lp.Pane == p {
 							liveText = " · " + lp.State
+							if lp.AgentLive != nil {
+								// An agent's own state and last-activity age sit
+								// beside it in the Agents column.
+								agentLive = " · " + lp.State
+								if lp.AgentLive.Activity != nil {
+									agentLive += " " + humanDuration(o.now.Sub(*lp.AgentLive.Activity))
+									liveText += " · active " + lp.AgentLive.Activity.Format(time.RFC3339)
+								}
+								if lp.AgentLive.Session != "" {
+									liveText += " · agent session " + lp.AgentLive.Session
+								}
+							}
 							break
 						}
 					}
+				}
+				if label := agent + agentLive; agent != "" && !slices.Contains(agents, label) {
+					agents = append(agents, label)
+				}
+				if p.AgentID != "" {
+					liveText = " · agent id " + p.AgentID + liveText
 				}
 				paneDetail = append(paneDetail, fmt.Sprintf("- %s: %s · %s · session %s · since %s", p.Role, window, agent, p.Session, p.Since.Format(time.RFC3339))+liveText)
 			}
@@ -392,6 +407,14 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	}
 	walk("")
 	return out, e
+}
+
+// shortAgentID keeps agent ids readable in a cell; the full id is in detail.
+func shortAgentID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 func humanDuration(d time.Duration) string {
 	if d < 0 {

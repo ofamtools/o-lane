@@ -9,7 +9,7 @@ import (
 
 const defaultStates = `[{"name":"planned","tone":"dim","open":true},{"name":"running","tone":"state.working","starts":true,"open":true},{"name":"parked","tone":"dim","open":true},{"name":"review","tone":"accent","open":true},{"name":"merged","tone":"state.done","ends":true},{"name":"done","tone":"state.done","ends":true},{"name":"cancelled","tone":"dim","ends":true}]`
 
-const defaultLiveStates = `{"working":{"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"none":{"name":"shell"},"":{"name":"shell"}}`
+const defaultLiveStates = `{"working":{"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
 
 const defaultStatePresets = `{"start":"running","park":"parked","review":"review","merge":"merged","finish":"done","cancel":"cancelled","reopen":"planned"}`
 
@@ -36,7 +36,7 @@ func appSettings() []ochazuke.Setting {
 		{Name: "lanes.export.columns", Type: ochazuke.SettingList, Default: []string{"wording", "estimate", "started", "finished", "result"}, Description: "Export columns"},
 		{Name: "lanes.pane-open", Type: ochazuke.SettingList, Default: []string{"tuios", "focus-window", "-s", "{session}", "{window}"}, Description: "Pane focus argv template"},
 		{Name: "lanes.live-states", Type: ochazuke.SettingString, Default: defaultLiveStates, Validate: func(v any) error { _, e := parseLiveStates(fmt.Sprint(v)); return e }, Description: "JSON pane state to {name, tone, glyph} map; legacy string labels accepted"},
-		{Name: "lanes.live-precedence", Type: ochazuke.SettingList, Default: []string{"needs input", "errored", "working", "done", "idle", "closed"}, Description: "Live state aggregation priority"},
+		{Name: "lanes.live-precedence", Type: ochazuke.SettingList, Default: []string{"needs input", "errored", "working", "done", "idle", "closed", "missing"}, Description: "Live state aggregation priority"},
 		{Name: "lanes.live-roles", Type: ochazuke.SettingList, Default: []string{}, Description: "Roles counted in the aggregate; empty includes all; pane details always include every role"},
 		{Name: "lanes.project-source", Type: ochazuke.SettingString, Default: projectSourceDefault(), Validate: func(v any) error {
 			if x := fmt.Sprint(v); x != "mtm" && x != "none" && x != "" {
@@ -46,6 +46,8 @@ func appSettings() []ochazuke.Setting {
 		}, Description: "Where project completion looks: mtm (default when mtm is on PATH) or none; never required"},
 		{Name: "lanes.project-filter", Type: ochazuke.SettingString, Default: "", Description: "Page shows only subtrees containing this project; empty shows all"},
 		{Name: "lanes.state-filter", Type: ochazuke.SettingList, Default: []string{}, Description: "Page shows only lanes in these lifecycle states, with their ancestors as context; empty shows all"},
+		{Name: "lanes.agent-harnesses", Type: ochazuke.SettingString, Default: defaultAgentHarnesses, Validate: func(v any) error { _, e := parseAgentHarnesses(fmt.Sprint(v)); return e }, Description: "JSON harness name to agent data row: transcripts (path templates with {agent}/{session}), time_field, idle, events (hook event to start/stop) and fields (hook payload field names)"},
+		{Name: "lanes.agent-idle", Type: ochazuke.SettingDuration, Default: 3 * time.Minute, Description: "An associated agent with no transcript activity for this long is idle; zero never idles"},
 		{Name: "backup.daily", Type: ochazuke.SettingBoolean, Default: true, Description: "Private daily backup before first mutation"},
 		{Name: "backup.keep", Type: ochazuke.SettingInteger, Default: 14, Description: "Daily archives to retain"},
 	}
@@ -55,7 +57,7 @@ func appSettings() []ochazuke.Setting {
 		desc  string
 	}{
 		{"lanes.tree", true, "Show lane nesting; changes apply on the next page mount"}, {"lanes.state-tones", true, "Colour lifecycle states"}, {"lanes.detail", true, "Show lane detail sections; changes apply on the next page mount"},
-		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.live-tones", true, "Colour live state"},
+		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.agent-live", true, "Read live state of associated agents from lanes.agent-harnesses data"}, {"lanes.live-tones", true, "Colour live state"},
 		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"}, {"lanes.name-tone", true, "Draw the lane name in the same tone as its state cell"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})

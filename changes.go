@@ -326,9 +326,15 @@ func (s *Store) Link(target string, link Link, remove bool) (Lane, error) {
 	return s.mutate(action, target, func(q *Lane, _ *[]Lane) error { return s.link(q, link, remove) })
 }
 func samePane(a, b Pane) bool {
-	return a.Host == b.Host && a.Session == b.Session && a.Window == b.Window && a.Role == b.Role && a.Harness == b.Harness && a.Model == b.Model && a.Agent == b.Agent
+	return a.Host == b.Host && a.Session == b.Session && a.Window == b.Window && a.Role == b.Role && a.Harness == b.Harness && a.Model == b.Model && a.Agent == b.Agent && a.AgentID == b.AgentID && a.AgentSession == b.AgentSession
 }
+
+// A participant is keyed by its agent when it names one (an agent may run in
+// a pane another participant also names), else by its pane.
 func paneKey(a, b Pane) bool {
+	if a.AgentID != "" || b.AgentID != "" {
+		return a.AgentID == b.AgentID && a.Harness == b.Harness
+	}
 	if a.Window != "" || b.Window != "" {
 		return a.Host == b.Host && a.Session == b.Session && a.Window == b.Window
 	}
@@ -337,6 +343,9 @@ func paneKey(a, b Pane) bool {
 
 // A query's empty host/session are wildcards on both relation views.
 func paneMatches(stored, query Pane) bool {
+	if query.AgentID != "" {
+		return stored.AgentID == query.AgentID && (query.Harness == "" || stored.Harness == query.Harness)
+	}
 	if query.Window != "" {
 		return stored.Window == query.Window && (query.Session == "" || stored.Session == query.Session) && (query.Host == "" || stored.Host == query.Host)
 	}
@@ -405,7 +414,7 @@ func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, err
 			q.Worktree = worktree
 		}
 		// Capture pane-less subagents as an unassociated participation record.
-		if p.Window != "" || p.Harness != "" || p.Agent != "" || p.Model != "" {
+		if p.Window != "" || p.Harness != "" || p.Agent != "" || p.Model != "" || p.AgentID != "" {
 			s.associate(q, p, false)
 		}
 		return nil

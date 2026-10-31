@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-01-01T13:20:00Z","agentId":"a3f09c2e71d4b5a68","message":{"role":"user","content":"map the api"}}
+{"type":"assistant","timestamp":"2026-01-01T13:29:00Z","agentId":"a3f09c2e71d4b5a68","message":{"role":"assistant","content":"reading"}}

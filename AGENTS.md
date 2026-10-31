@@ -13,4 +13,5 @@ Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the
 - Defaults must work for any user: XDG data, no machine paths, no required external daemon. Export is optional and off by default.
 - Store writes are locked, atomic and recoverable. Every mutation records its actor and supports undo. Live state is derived and never persisted.
 - Tests and manual app runs use explicit `--data` and HOME/XDG fixtures under a task scratch directory. Never read or change the owner's database/config. Go checks run under nice with `GOFLAGS='-trimpath -p=2' GOMAXPROCS=3`.
+- Agent participants and their live state are data: harness behaviour lives in `lanes.agent-harnesses` rows and integrations in `setup.json`; never branch on a harness name. `agent-hook` must stay lock-free, bounded and exit 0. Tests write settings files only under temp homes (`setup ... --home`).
 - Keep docs/CODEMAP.md and the hand-written Unreleased changelog current. Plans stay in the family plan repository.

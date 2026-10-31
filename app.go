@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"ofam.dev/ochazuke"
@@ -29,6 +30,8 @@ type App struct {
 	showUI      func(View) error
 	rowsLoaded  func([]ocli.Row, error)
 	reader      *liveReader
+	agentsOnce  sync.Once
+	agents      *agentLog
 }
 type verbSpec struct {
 	noun, name, description string
@@ -92,6 +95,9 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		a.r.Operations[op.Key()] = op
 	}
 	if e = a.registerPage(); e != nil {
+		return nil, e
+	}
+	if e = a.declareSetup(); e != nil {
 		return nil, e
 	}
 	return a, nil
@@ -168,7 +174,7 @@ func (a *App) specs() []verbSpec {
 		{"lane", "reword", "Change the owner's wording, retaining undo", common(map[string]ochazuke.Parameter{"text": required("Verbatim wording")}), []string{"target", "text"}, false},
 		{"lane", "move", "Change parent; refuses cycles", common(map[string]ochazuke.Parameter{"parent": param("New parent; empty makes root")}), []string{"target", "parent"}, false},
 		{"lane", "copy", "Copy spec into a planned retry linked to the original", common(map[string]ochazuke.Parameter{"name": param("New name")}), []string{"target", "name"}, false},
-		{"lane", "start", "Start a lane, optionally recording a pane or pane-less agent", common(map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "branch": param("Branch"), "worktree": param("Worktree path")}), []string{"target"}, false},
+		{"lane", "start", "Start a lane, optionally recording a pane or pane-less agent", common(map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "agent-id": param("Harness sub-agent ID (live state from lanes.agent-harnesses)"), "agent-session": param("Harness session the agent runs in"), "branch": param("Branch"), "worktree": param("Worktree path")}), []string{"target"}, false},
 		{"lane", "state", "Record any configured state; from-tag uses lanes.tag-states", common(map[string]ochazuke.Parameter{"state": param("Lifecycle state"), "note": param("History note"), "from-tag": param("Watcher tag; unmapped tags append notes")}), []string{"target", "state"}, false},
 		{"lane", "note", "Append a history note", common(map[string]ochazuke.Parameter{"text": required("Note")}), []string{"target", "text"}, false},
 		{"lane", "live", "Read each pane and the aggregate live state of the lane subtree", common(nil), []string{"target"}, true},
@@ -184,17 +190,20 @@ func (a *App) specs() []verbSpec {
 	for _, verb := range []string{"link", "unlink"} {
 		rows = append(rows, verbSpec{"lane", verb, "Add or remove a typed link", common(map[string]ochazuke.Parameter{"kind": required("Link kind"), "link": required("Link target"), "label": param("Label")}), []string{"target", "kind", "link"}, false})
 	}
-	for _, noun := range []string{"lane", "pane", "project"} {
+	for _, noun := range []string{"lane", "pane", "agent", "project"} {
 		for _, verb := range []string{"associate", "unassociate"} {
-			m := common(map[string]ochazuke.Parameter{"lane": param("Lane ID for pane-side relation"), "pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role; default implementer"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind")})
+			m := common(map[string]ochazuke.Parameter{"lane": param("Lane ID for pane- or agent-side relation"), "pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role; default implementer"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "agent-id": param("Harness sub-agent ID (live state from lanes.agent-harnesses)"), "agent-session": param("Harness session the agent runs in")})
 			pos := []string{"target", "pane"}
 			desc := "Associate or unassociate a lane and pane"
 			switch noun {
 			case "lane":
 				m["project"] = projectParam("Project reference to associate (or, for unassociate, to remove); a root's project covers its subtree")
-				desc = "Associate or unassociate a lane with a pane or project"
+				desc = "Associate or unassociate a lane with a pane, agent or project"
 			case "pane":
 				pos = []string{"pane", "lane"}
+			case "agent":
+				pos = []string{"agent-id", "lane"}
+				desc = "Associate or unassociate an agent and lane; same handler as lane." + verb + " --agent-id"
 			case "project":
 				m = map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "lane": required("Lane ID, unique prefix or name")}
 				pos = []string{"project", "lane"}
@@ -206,6 +215,10 @@ func (a *App) specs() []verbSpec {
 	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "state": stateParam("")}, []string{"project"}, true})
 	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true})
 	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true})
+	agentRef := map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any")}
+	rows = append(rows, verbSpec{"agent", "lanes", "List lanes associated with an agent", agentRef, []string{"agent-id"}, true})
+	rows = append(rows, verbSpec{"agent", "live", "Read an agent's live state (working, idle, done, missing) from lanes.agent-harnesses data", map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any"), "agent-session": param("Harness session the agent runs in")}, []string{"agent-id"}, true})
+	rows = append(rows, verbSpec{"agent", "list", "List agents recorded by agent-hook, newest first, with live state", nil, nil, true})
 	return rows
 }
 func done(v any, e error) ochazuke.Result {
@@ -239,7 +252,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		}
 		target = strings.TrimPrefix(target, "lane/")
 	}
-	p := Pane{Host: str("host"), Session: str("session"), Window: str("pane"), Role: str("role"), Harness: str("harness"), Model: str("model"), Agent: str("agent")}
+	p := Pane{Host: str("host"), Session: str("session"), Window: str("pane"), Role: str("role"), Harness: str("harness"), Model: str("model"), Agent: str("agent"), AgentID: str("agent-id"), AgentSession: str("agent-session")}
 	if noun == "lane" && verb == "choose-state" {
 		verb = "state"
 	}
@@ -279,6 +292,38 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		target = str("lane")
 		if p.Window == "" {
 			p.Window = str("target")
+		}
+	}
+	if noun == "agent" {
+		switch verb {
+		case "list":
+			out, e := a.agentRows()
+			return done(out, e)
+		case "live":
+			if !safeAgentID(p.AgentID) {
+				return done(nil, fmt.Errorf("agent.live needs a simple agent id"))
+			}
+			read := a.agentReader()
+			return done(read(p), nil)
+		case "lanes":
+			rows, e := s.List()
+			if e != nil {
+				return done(nil, e)
+			}
+			out := []View{}
+			for _, q := range rows {
+				for _, old := range q.Panes {
+					if paneMatches(old, p) {
+						out = append(out, s.view(q, rows))
+						break
+					}
+				}
+			}
+			return done(out, a.enrichLive(out))
+		}
+		target = str("lane")
+		if p.AgentID == "" {
+			p.AgentID = str("target")
 		}
 	}
 	project := str("project")
@@ -467,7 +512,10 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			return done(nil, fmt.Errorf("unknown role %q; configure lanes.pane-roles", p.Role))
 		}
 		remove := verb == "unassociate"
-		if project != "" && p.Window == "" && p.Host == "" && p.Harness == "" && p.Model == "" && p.Agent == "" {
+		if p.AgentID != "" && !safeAgentID(p.AgentID) {
+			return done(nil, fmt.Errorf("agent id %q must be a simple id (letters, digits, _ . -)", p.AgentID))
+		}
+		if project != "" && p.Window == "" && p.Host == "" && p.Harness == "" && p.Model == "" && p.Agent == "" && p.AgentID == "" {
 			q, e := s.AssociateProject(target, project, remove)
 			return done(q, e)
 		}

@@ -19,10 +19,12 @@ type LiveState struct {
 }
 type LivePane struct {
 	Pane
-	State string `json:"live"`
-	Tone  string `json:"tone,omitempty"`
-	Glyph string `json:"glyph,omitempty"`
-	Error string `json:"error,omitempty"`
+	// AgentLive is an agent participant's derived state, when agents are read.
+	AgentLive *AgentStatus `json:"agent_live,omitempty"`
+	State     string       `json:"live"`
+	Tone      string       `json:"tone,omitempty"`
+	Glyph     string       `json:"glyph,omitempty"`
+	Error     string       `json:"error,omitempty"`
 }
 type Live struct {
 	State string     `json:"state"`
@@ -39,6 +41,8 @@ type liveOptions struct {
 	on                bool
 	mapping           map[string]LiveState
 	roles, precedence []string
+	// agent reads an agent participant's state; nil leaves agents unread.
+	agent func(Pane) AgentStatus
 }
 
 // String values from the L2 settings remain accepted for existing users.
@@ -73,6 +77,9 @@ func (a *App) liveOptions() (liveOptions, error) {
 	}
 	var err error
 	o.mapping, err = parseLiveStates(cfg.String("lanes.live-states"))
+	if err == nil && cfg.Bool("lanes.agent-live") {
+		o.agent = a.agentReader()
+	}
 	return o, err
 }
 func panesInSubtree(rows []Lane, q Lane) []Pane {
@@ -142,7 +149,16 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 	states := map[string]LivePane{}
 	for _, p := range panes {
 		item := LivePane{Pane: p, State: "unassociated"}
-		if p.Window != "" {
+		if p.AgentID != "" && o.agent != nil {
+			st := o.agent(p)
+			item.AgentLive = &st
+			item.Error = st.Error
+			mapped, ok := o.mapping[st.State]
+			if !ok {
+				mapped.Name = st.State
+			}
+			item.State, item.Tone, item.Glyph = mapped.Name, mapped.Tone, mapped.Glyph
+		} else if p.Window != "" {
 			snap, ok := snapshots[scopeOf(p)]
 			if !ok || snap.err != nil {
 				item.State = "unknown"

@@ -76,6 +76,7 @@ func dispatch(a *App, args []string) error {
 	sh := a.shell()
 	app := oden.New("o-lane", args, oden.WithBuiltins(), oden.WithStdio(a.in, a.out, a.errOut))
 	ocli.Mount(app, sh)
+	app.Add(oden.Command{Name: "agent-hook", Summary: "Record a harness hook payload (stdin) for agent live state; never fails", Usage: "HARNESS [EVENT]", Run: func(_ context.Context, args []string) error { a.agentHook(args); return nil }})
 	app.Add(oden.Command{Name: "view", Summary: "Open the lanes tree page", Run: func(_ context.Context, args []string) error { return runTUI(a, args) }})
 	return app.Run(context.Background())
 }
