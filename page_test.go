@@ -42,7 +42,7 @@ func pageFixture(t *testing.T) *App {
 	a.run = func(_ context.Context, argv []string) ([]byte, error) {
 		switch strings.Join(argv, " ") {
 		case "tuios list-sessions --json":
-			return []byte(`{"sessions":[{"name":"fixture-session"}]}`), nil
+			return []byte(`[{"name":"fixture-session"}]`), nil
 		case "tuios list-windows --json -s fixture-session":
 			return []byte(`{"windows":[{"window_id":"fixture-window","name":"Worker","harness":"codex"}]}`), nil
 		case "tuios focus-window -s fixture-session fixture-window":
@@ -88,6 +88,7 @@ func TestLaneStories(t *testing.T) {
 	for _, story := range stories {
 		t.Run(story.Name, func(t *testing.T) {
 			var a *App
+			var focused [][]string
 			lib := monogatari.Library{Stories: stories, Apps: []monogatari.App{{Name: "o-lane", Fixtures: []monogatari.Fixture{{Name: "lanes", Build: func(env monogatari.Env) (monogatari.Built, error) {
 				a = pageFixture(t)
 				seedPage(t, a, env.Seed)
@@ -104,6 +105,13 @@ func TestLaneStories(t *testing.T) {
 					if e := a.r.Settings().Set(name, value); e != nil {
 						return monogatari.Built{}, e
 					}
+				}
+				run := a.run
+				a.run = func(ctx context.Context, argv []string) ([]byte, error) {
+					if len(argv) > 1 && argv[1] == "focus-window" {
+						focused = append(focused, append([]string(nil), argv...))
+					}
+					return run(ctx, argv)
 				}
 				p, e := mountPage(a)
 				if e != nil {
@@ -142,6 +150,12 @@ func TestLaneStories(t *testing.T) {
 				q, e := a.store.Resolve("Implementation")
 				if e != nil || len(q.Panes) != 1 || q.Panes[0].Window != "fixture-window" || q.Panes[0].Session != "fixture-session" {
 					t.Fatal(q, e)
+				}
+			}
+			if story.Name == "lanes/focus-pane" {
+				want := [][]string{{"tuios", "focus-window", "-s", "fixture-session", "fixture-window"}}
+				if !reflect.DeepEqual(focused, want) {
+					t.Fatalf("focus commands = %v, want %v", focused, want)
 				}
 			}
 		})

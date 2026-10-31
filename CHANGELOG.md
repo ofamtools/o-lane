@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Accept tuios session/window lists as either JSON arrays or named objects for pane choices and live snapshots; preserve explicit session/window targets when focusing a lane's pane with `g p`.
+
 - Associate lanes with harness sub-agents: `lane associate/unassociate --agent-id ID [--harness H] [--agent-session S]` and the agent-side `agent associate/unassociate/lanes` share the association handler; `agent live` and `agent list` read agent state. Agent participants are keyed by harness and id.
 - Agent live state (working, idle, done, missing) derived from `lanes.agent-harnesses` data rows (transcript path templates, time field, idle override, hook event map, payload fields; default row for Claude Code subagents) and `lanes.agent-idle` (default 3m). It joins the lane's live aggregate; the Agents column shows each agent's state and last-activity age. `lanes.agent-live` (default true) turns it off. Adds a `missing` row to the default `lanes.live-states` and `lanes.live-precedence`.
 - `o-lane agent-hook HARNESS [EVENT]` appends a hook payload's start/stop to `agent-events.jsonl` in the data directory; bounded, lock-free and always exits 0.

@@ -1,0 +1,13 @@
+[
+  {
+    "window_id": "fixture-window",
+    "title": "Worker",
+    "custom_name": "Worker",
+    "display_name": "Worker",
+    "agent_state": "idle",
+    "focused": false,
+    "workspace": 2,
+    "width": 174,
+    "height": 59
+  }
+]

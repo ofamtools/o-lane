@@ -127,11 +127,9 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 			cancel()
 			snap.err = err
 			if err == nil {
-				var doc struct {
-					Windows []windowState `json:"windows"`
-				}
-				snap.err = json.Unmarshal(b, &doc)
-				for _, w := range doc.Windows {
+				windows, err := decodeTuiosList[windowState](b, "windows")
+				snap.err = err
+				for _, w := range windows {
 					snap.windows[w.Window] = w.State
 				}
 			}

@@ -1,0 +1,13 @@
+{
+  "sessions": [
+    {
+      "name": "hub",
+      "id": "fixture-session-id",
+      "window_count": 12,
+      "attached": false,
+      "width": 282,
+      "height": 75,
+      "current_workspace": 2
+    }
+  ]
+}

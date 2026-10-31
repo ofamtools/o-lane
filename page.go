@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
@@ -444,17 +443,15 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 	if e != nil {
 		return nil, e
 	}
-	var sessions struct {
-		Sessions []struct {
-			Name string `json:"name"`
-			ID   string `json:"id"`
-		} `json:"sessions"`
-	}
-	if e = json.Unmarshal(b, &sessions); e != nil {
+	sessions, e := decodeTuiosList[struct {
+		Name string `json:"name"`
+		ID   string `json:"id"`
+	}](b, "sessions")
+	if e != nil {
 		return nil, e
 	}
 	out := []ochazuke.Choice{}
-	for _, session := range sessions.Sessions {
+	for _, session := range sessions {
 		name := session.Name
 		if name == "" {
 			name = session.ID
@@ -466,18 +463,16 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 		if e != nil {
 			return nil, fmt.Errorf("session %s: %w", name, e)
 		}
-		var windows struct {
-			Windows []struct {
-				ID      string `json:"window_id"`
-				Name    string `json:"name"`
-				Title   string `json:"title"`
-				Harness string `json:"harness"`
-			} `json:"windows"`
-		}
-		if e = json.Unmarshal(b, &windows); e != nil {
+		windows, e := decodeTuiosList[struct {
+			ID      string `json:"window_id"`
+			Name    string `json:"name"`
+			Title   string `json:"title"`
+			Harness string `json:"harness"`
+		}](b, "windows")
+		if e != nil {
 			return nil, e
 		}
-		for _, w := range windows.Windows {
+		for _, w := range windows {
 			if w.ID == "" {
 				continue
 			}

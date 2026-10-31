@@ -1,0 +1,24 @@
+{
+  "name": "lanes/focus-pane",
+  "app": "o-lane",
+  "width": 150,
+  "height": 42,
+  "values": {"lanes.live": false},
+  "seed": {"lanes": [{"name": "Implementation"}]},
+  "script": [
+    "a",
+    "ctrl+space",
+    {"job": "pane.choices", "state": "done"},
+    {"type": "Worker"},
+    "enter",
+    "enter",
+    {"job": "lane.rows", "state": "done"},
+    "g",
+    "p",
+    {"job": "lane.focus-pane", "state": "done"}
+  ],
+  "expect": [
+    {"after": 3, "contains": ["Worker", "fixture-session"]},
+    {"after": 10, "modal": "", "contains": ["Implementation", "implementer"], "lacks": ["failed"]}
+  ]
+}

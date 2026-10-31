@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "message": "command executed",
+  "total": 1,
+  "current_workspace": 2,
+  "focused_index": 0,
+  "focused_window_id": "fixture-window",
+  "windows": [
+    {
+      "window_id": "fixture-window",
+      "title": "Worker",
+      "custom_name": "Worker",
+      "display_name": "Worker",
+      "agent_state": "idle",
+      "focused": false,
+      "workspace": 2,
+      "width": 174,
+      "height": 59
+    }
+  ]
+}
