@@ -21,3 +21,13 @@ Agent defaults allow ordinary lane work and reverse relations. Delete and reword
 Dependencies are released tags: ochazuke v0.72.1, oden v0.1.1 and monogatari v0.3.0 (reserved for page stories). The Makefile bounds Go parallelism and uses `GOWORK=off`, trimpath and nice. `gate` includes formatting, vet and race tests for the coordinator.
 
 Compared with Vim: lanes are domain records, so no Vim editing behaviour is introduced. Future tree motions use ochazuke's existing behaviour.
+
+The released generic MCP server is available as `o-lane mcp serve` (the fully qualified spelling is `o-lane ochazuke mcp serve`). It provides catalog, describe, run and state over newline-delimited JSON-RPC. `o-lane mcp config` prints the harness entry, with the qualified spelling to avoid future app-name collisions. MCP always binds an agent identity, even if the launching shell identifies as owner; tool arguments cannot supply an actor. The stdio smoke test covers define/start/state/associate, dry-run, immutable request identity and declaration-named refusals for delete/reword. Import remains absent until L6, where it must declare never; export must declare confirm.
+
+A harness config entry has the following shape; use the generated `mcp config` output for the installed executable path. It uses normal XDG storage unless an explicit `--data` override is added to the arguments.
+
+```json
+{"mcpServers":{"o-lane":{"command":"o-lane","args":["ochazuke","mcp","serve"]}}}
+```
+
+MCP's framework history describes requests in the current server process. Durable domain undo is `lane.undo`; custom domain verbs do not publish a framework `history.undo` inverse. No harness or owner config is edited by the application.

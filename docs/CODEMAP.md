@@ -13,6 +13,7 @@
 - `live.go`: one-shot tuios reads, aggregation and argv-based focus through an injectable runner. Subscriptions/page remain later work.
 - `app_test.go`, `cli_test.go`: isolated schema, per-verb CLI, rights, actor and configurable-state checks.
 - `store_test.go`: process concurrency, recovery, undo, cycle refusal, define atomicity and daily archives.
+- `mcp_test.go`: generic framework stdio protocol, transport attribution, dry run, rights refusals and generated harness config.
 - `Makefile`: bounded Go build/test and coordinator race gate.
 
 The app owns domain state and persistence; released ochazuke owns the CLI, catalog, rights gate and future UI. No family-library modifications or local module replacements are required.

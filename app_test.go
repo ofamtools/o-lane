@@ -10,12 +10,15 @@ import (
 
 func fixture(t *testing.T) string {
 	t.Helper()
+	if err := os.MkdirAll("/tmp/o-lane-core", 0700); err != nil {
+		t.Fatal(err)
+	}
 	base, err := os.MkdirTemp("/tmp/o-lane-core/", "test-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(base) })
-	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME"} {
+	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"} {
 		t.Setenv(k, filepath.Join(base, k))
 	}
 	t.Setenv("OCHAZUKE_ACTOR", "owner")

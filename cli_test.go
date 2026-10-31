@@ -71,7 +71,11 @@ func (f *cliFixture) lane(args ...string) map[string]any {
 func (f *cliFixture) fail(want string, args ...string) {
 	f.t.Helper()
 	f.out.Reset()
-	e := dispatch(f.a, args)
+	words, _, e := globalData(append([]string{"--data", f.dir}, args...))
+	if e != nil {
+		f.t.Fatal(e)
+	}
+	e = dispatch(f.a, words)
 	if e == nil || !strings.Contains(e.Error(), want) {
 		f.t.Fatalf("%v: want %q, got %v", args, want, e)
 	}
