@@ -1,0 +1,36 @@
+{
+  "name": "lanes/name-tone-off",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "theme": "dark",
+  "values": {
+    "lanes.name-tone": false
+  },
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation"
+      },
+      {
+        "name": "Aardvark"
+      }
+    ],
+    "start": "Implementation"
+  },
+  "script": [
+    "j"
+  ],
+  "expect": [
+    {
+      "after": 1,
+      "highlightedText": "Aardvark",
+      "styled": {
+        "running": "#7CB7E8"
+      },
+      "attrs": {
+        "Implementation": "-fg"
+      }
+    }
+  ]
+}

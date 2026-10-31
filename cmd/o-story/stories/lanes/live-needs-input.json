@@ -8,6 +8,9 @@
       {
         "name": "Implementation",
         "wording": "Keep the owner words"
+      },
+      {
+        "name": "Aardvark"
       }
     ],
     "start": "Implementation",
@@ -32,16 +35,28 @@
   },
   "values": {},
   "script": [
-    "j"
+    "j",
+    "k"
   ],
   "expect": [
     {
       "after": 0,
       "contains": [
         "Implementation",
-        "running \u00b7 needs input",
+        "running · needs input",
         "Keep the owner words"
       ]
+    },
+    {
+      "after": 1,
+      "highlightedText": "Aardvark",
+      "attrs": {
+        "Implementation": "bold,fg"
+      },
+      "colored": {
+        "Implementation": "#E3B341"
+      }
     }
-  ]
+  ],
+  "theme": "dark"
 }

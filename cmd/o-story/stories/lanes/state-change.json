@@ -7,6 +7,9 @@
     "lanes": [
       {
         "name": "Implementation"
+      },
+      {
+        "name": "Aardvark"
       }
     ]
   },
@@ -21,7 +24,8 @@
     {
       "job": "lane.rows",
       "state": "done"
-    }
+    },
+    "j"
   ],
   "expect": [
     {
@@ -37,6 +41,15 @@
         "running"
       ],
       "modal": ""
+    },
+    {
+      "after": 7,
+      "highlightedText": "Aardvark",
+      "styled": {
+        "Implementation": "#7CB7E8",
+        "running": "#7CB7E8"
+      }
     }
-  ]
+  ],
+  "theme": "dark"
 }

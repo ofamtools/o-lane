@@ -42,6 +42,7 @@ Page settings and defaults:
 | `lanes.state-tones` | true | Plain lifecycle cells |
 | `lanes.live` | true | Lifecycle-only cells; no snapshots or subscription |
 | `lanes.live-tones` | true | Keep live words and glyphs without their colour |
+| `lanes.name-tone` | true | Plain lane names; otherwise the name uses the tone that draws its state cell (live tone when shown, else lifecycle tone). Selection and focus styles still win |
 | `lanes.durations` | true | Hide the elapsed/duration column |
 | `lanes.pane-column` | true | Hide the pane-role column |
 | `lanes.history-in-detail` | true | Hide the history section and history projection |

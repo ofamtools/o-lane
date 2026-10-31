@@ -101,14 +101,14 @@ type pageOptions struct {
 	live                                                               liveOptions
 	liveTones                                                          bool
 	liveRows                                                           map[string]Live
-	groupProjects, projectColumn                                       bool
+	groupProjects, projectColumn, nameTone                             bool
 	project                                                            string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), project: cfg.String("lanes.project-filter")}
+	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), project: cfg.String("lanes.project-filter")}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -349,18 +349,30 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			if o.tree {
 				row.Parent = q.Parent
 			}
+			// The name takes whichever tone draws the state cell: the live tone
+			// when it is shown, else the lifecycle tone. Both come from data.
+			nameTone := ""
+			if o.tones {
+				nameTone = s.states()[state].Tone
+			}
+			if showLive && o.liveTones && live.Tone != "" {
+				nameTone = live.Tone
+			}
 			if o.tones {
 				span := ochazuke.CellTone(1, s.states()[state].Tone)
 				if showLive {
 					span.To = len([]rune(state))
 				}
-				row.Tones = []ochazuke.ToneSpan{span}
+				row.Tones = append(row.Tones, span)
 			}
 			if showLive && o.liveTones && live.Tone != "" {
 				row.Tones = append(row.Tones, ochazuke.SpanTone(1, len([]rune(state))+3, 0, live.Tone))
 				if live.Glyph != "" {
 					row.Tones = append(row.Tones, ochazuke.SpanTone(0, 0, len([]rune(live.Glyph)), live.Tone))
 				}
+			}
+			if o.nameTone && nameTone != "" {
+				row.Tones = append(row.Tones, ochazuke.CellTone(0, nameTone))
 			}
 			out = append(out, row)
 			walk(q.ID)

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lanes page: the lane name takes the same tone as its state cell (lifecycle tone, or the live tone when live state is shown), from the existing tone data; `lanes.name-tone` (default true) turns it off.
 - Scope lanes to projects: a `project` reference on lanes (inherited from the nearest ancestor), `--project` on lane define/add and plan define, `lane associate/unassociate --project` sharing one handler with `project associate/unassociate`, `project lanes`/`project list`, and `--project` filters on lane list/tree/rows. Records without a project load as unassociated.
 - Lanes page: project column, grouping of roots by project and a project filter (`lanes.project-column`, `lanes.group-by-project`, `lanes.project-filter`). Optional `lanes.project-source` (mtm when installed, else none) completes project names through the injectable runner; it is never required.
 

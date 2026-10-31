@@ -195,7 +195,7 @@ func TestLivePageOptOuts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows[0].Cells[0] != "? Implementation" || len(rows[0].Tones) != 3 || rows[0].Tones[0].To != 7 || rows[0].Tones[1].From != 10 || rows[0].Tones[1].Tone != ochazuke.ToneNeedsInput {
+	if rows[0].Cells[0] != "? Implementation" || len(rows[0].Tones) != 4 || rows[0].Tones[3] != ochazuke.CellTone(0, ochazuke.ToneNeedsInput) || rows[0].Tones[0].To != 7 || rows[0].Tones[1].From != 10 || rows[0].Tones[1].Tone != ochazuke.ToneNeedsInput {
 		t.Fatal(rows)
 	}
 	for _, tone := range []bool{false, true} {
@@ -206,9 +206,13 @@ func TestLivePageOptOuts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := 1
+		// The name cell's tone follows whichever tone draws the state cell.
+		want, name := 2, ochazuke.ToneWorking
 		if tone {
-			want = 3
+			want, name = 4, ochazuke.ToneNeedsInput
+		}
+		if last := rows[0].Tones[len(rows[0].Tones)-1]; last != ochazuke.CellTone(0, name) {
+			t.Fatal(rows[0].Tones)
 		}
 		if len(rows[0].Tones) != want || rows[0].Cells[1] != "running · needs input" {
 			t.Fatal(rows)

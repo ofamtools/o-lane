@@ -18,7 +18,8 @@
         "name": "Tests",
         "parent": "Implementation"
       }
-    ]
+    ],
+    "start": "Tests"
   },
   "script": [
     "j",
@@ -35,11 +36,15 @@
         "Tests",
         "Keep the owner words",
         "unassociated"
-      ]
+      ],
+      "styled": {
+        "Tests": "#7CB7E8"
+      }
     },
     {
       "after": 2,
       "highlightedText": "Tests"
     }
-  ]
+  ],
+  "theme": "dark"
 }
