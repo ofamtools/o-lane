@@ -12,13 +12,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/unixsuperhero/ochazuke"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	table "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+	"ofam.dev/ochazuke"
 )
 
 const defaultImportColumns = `{"lane":"name","scope":"scope","work":"scope","what":"scope","repo":"repo","depends on":"depends","estimate":"estimate","est.":"estimate","lane time":"estimate","agent time":"estimate","done when":"done_when","tests and stories":"tests"}`

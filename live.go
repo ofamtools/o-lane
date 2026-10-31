@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
+	"ofam.dev/ochazuke"
 )
 
 // LiveState is presentation data, shared by the CLI and portable page.

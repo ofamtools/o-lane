@@ -1,13 +1,13 @@
-module github.com/unixsuperhero/o-lane
+module ofam.dev/o-lane
 
 go 1.27.1
 
 require (
 	charm.land/bubbletea/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
-	github.com/unixsuperhero/monogatari v0.3.0
-	github.com/unixsuperhero/ochazuke v0.72.1
-	github.com/unixsuperhero/oden v0.1.1
+	ofam.dev/monogatari v0.3.0
+	ofam.dev/ochazuke v0.72.1
+	ofam.dev/oden v0.1.1
 	github.com/yuin/goldmark v1.7.8
 	golang.org/x/sys v0.47.0
 )

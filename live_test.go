@@ -13,8 +13,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/unixsuperhero/ochazuke"
 	"io"
+	"ofam.dev/ochazuke"
 	"sync"
 	"testing"
 )

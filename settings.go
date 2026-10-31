@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/unixsuperhero/ochazuke"
+	"ofam.dev/ochazuke"
 )
 
 const defaultStates = `[{"name":"planned","tone":"dim","open":true},{"name":"running","tone":"state.working","starts":true,"open":true},{"name":"parked","tone":"dim","open":true},{"name":"review","tone":"accent","open":true},{"name":"merged","tone":"state.done","ends":true},{"name":"done","tone":"state.done","ends":true},{"name":"cancelled","tone":"dim","ends":true}]`

@@ -16,10 +16,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/unixsuperhero/monogatari"
-	"github.com/unixsuperhero/ochazuke"
-	ocli "github.com/unixsuperhero/ochazuke/cli"
-	"github.com/unixsuperhero/ochazuke/keytest"
+	"ofam.dev/monogatari"
+	"ofam.dev/ochazuke"
+	ocli "ofam.dev/ochazuke/cli"
+	"ofam.dev/ochazuke/keytest"
 )
 
 func pageFixture(t *testing.T) *App {
