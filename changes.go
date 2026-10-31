@@ -44,7 +44,13 @@ func setSpec(q *Spec, prop string, value any) error {
 	if e != nil {
 		return e
 	}
-	return json.Unmarshal(b, q)
+	if e = json.Unmarshal(b, q); e != nil {
+		return e
+	}
+	if len(q.Depends) == 0 {
+		q.Depends = nil
+	}
+	return nil
 }
 func (s *Store) add(rows *[]Lane, spec Spec) (Lane, error) {
 	if strings.TrimSpace(spec.Name) == "" {
@@ -83,12 +89,35 @@ func (s *Store) Add(spec Spec) (out Lane, err error) {
 	return
 }
 
-// Define is an atomic JSON batch. Plan-table parsing belongs to L3. Parents
-// may precede or follow children; repeated definitions match (parent, name),
-// update supplied spec fields, and preserve the owner's existing wording.
+// Define is an atomic batch. Parents may precede or follow children.
+// Repeated definitions match (parent, name), update supplied spec fields,
+// and preserve the owner's existing wording.
 func (s *Store) Define(specs []Spec) (out []Lane, err error) {
+	return s.defineFields(specs, nil)
+}
+
+func validateDefinitions(specs []Spec) error {
 	if len(specs) == 0 {
-		return nil, errors.New("define needs at least one lane")
+		return errors.New("define needs at least one lane")
+	}
+	seen := map[[2]string]bool{}
+	for _, spec := range specs {
+		if strings.TrimSpace(spec.Name) == "" {
+			return errors.New("lane name must not be empty")
+		}
+		key := [2]string{spec.Parent, spec.Name}
+		if seen[key] {
+			return fmt.Errorf("duplicate definition %q under %q", spec.Name, spec.Parent)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// Supplied fields retain explicit empty values from JSON or a table.
+func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lane, err error) {
+	if err = validateDefinitions(specs); err != nil {
+		return nil, err
 	}
 	err = s.change("define", func(rows *[]Lane) error {
 		type definition struct {
@@ -155,6 +184,9 @@ func (s *Store) Define(specs []Spec) (out []Lane, err error) {
 					var fields map[string]any
 					if e = json.Unmarshal(b, &fields); e != nil {
 						return e
+					}
+					if supplied != nil {
+						fields = supplied[item.Index]
 					}
 					for _, prop := range editable {
 						if v, ok := fields[prop]; ok {

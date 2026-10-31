@@ -6,6 +6,7 @@ require (
 	github.com/unixsuperhero/monogatari v0.3.0
 	github.com/unixsuperhero/ochazuke v0.72.1
 	github.com/unixsuperhero/oden v0.1.1
+	github.com/yuin/goldmark v1.7.8
 	golang.org/x/sys v0.47.0
 )
 
@@ -39,7 +40,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
-	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect

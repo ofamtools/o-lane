@@ -1,0 +1,186 @@
+{
+  "path": "plan.md",
+  "name": "Example plan",
+  "lanes": [
+    {
+      "name": "o-json-jobs-data",
+      "scope": "`docs/tapes/gen-jobs-data.go`, `testdata/jobs/orders.min.json`, `orders-broken.json`",
+      "done_when": "the generator is deterministic (same bytes on every run); `o-json structure` reads the first file and fails on the second with its line and column",
+      "tests": "a test that the generated file matches the checked-in one; story `doc/open-broken-shows-position.json` (`skip: gap` if red)",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "1 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-tutorial-blockers",
+      "scope": "The TODO.md items named in the T1–T8 rows: `o-json -`, `enter` on an object cell, `w` onto an existing file, path chooser ranking, `n`/`N` with the query line on, the breadcrumb's name vs path, the export message, the >200-key error, the query-mode `{`/`u`/`[` bugs",
+      "done_when": "each item has a story that was red and is green",
+      "tests": "one story per item (stories before fixes)",
+      "repo": "o-json",
+      "depends": [
+        "none (may run beside the data-follow lane; rebase after it)"
+      ],
+      "estimate": "4–6 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-guide-jobs",
+      "scope": "Rewrite GUIDE as T1–T8 and A1–A5, in [o-json-terms](o-json-terms.md) terms; per-chapter generated **Keys** blocks; \"Not yet\" lines; README links",
+      "done_when": "`TestCheatSheet` covers every chapter block; every README link to the guide resolves",
+      "tests": "`TestCheatSheet`; a link check over GUIDE and README anchors",
+      "repo": "o-json",
+      "depends": [
+        "`o-json-jobs-data`, `o-json-terms-text`, data-follow lane"
+      ],
+      "estimate": "4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-tapes-jobs",
+      "scope": "13 tapes by slug; gifs in `docs/img`; vhs-tutorial pages and a gallery under `workspace/test-archive/<date>/vhs/o-json-jobs/`",
+      "done_when": "every tape records with no error frames; the gallery opens in the browser page (not `open file.gif`)",
+      "tests": "the tapes' dry runs; frames checked for `Error:`",
+      "repo": "o-json (tapes, gifs); hub archive (pages)",
+      "depends": [
+        "`o-json-guide-jobs`, `o-json-tutorial-blockers`"
+      ],
+      "estimate": "3–4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-key-order",
+      "scope": "Job 7 (above)",
+      "done_when": "output equals input for an unedited document; A1 becomes \"Edit a config file without wrecking it\"",
+      "tests": "invariant test; story `inplace/identity-keeps-order.json`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "3–4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-yank-path",
+      "scope": "Job 4",
+      "done_when": "each noun with a path has `yank-path`; one handler",
+      "tests": "table test per noun; story `yank/path-of-cell.json`",
+      "repo": "o-json",
+      "depends": [
+        "question 7"
+      ],
+      "estimate": "2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-broken-excerpt",
+      "scope": "Job 8, partial",
+      "done_when": "the excerpt shows in the CLI and the viewer; the setting turns it off",
+      "tests": "story `doc/broken-excerpt.json` and `…-off.json`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "1–2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-value-search",
+      "scope": "Job 3, partial",
+      "done_when": "values match; `n`/`N` work with the query line on",
+      "tests": "stories `search/value-match.json`, `search/n-with-query-line.json`",
+      "repo": "o-json",
+      "depends": [
+        "question 2"
+      ],
+      "estimate": "3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-table-sort",
+      "scope": "Job 6, partial",
+      "done_when": "sort by column both ways; export writes the sorted order",
+      "tests": "story `table/sort-column.json` and the indicator-off story",
+      "repo": "o-json",
+      "depends": [
+        "question 10"
+      ],
+      "estimate": "2–3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-jsonl",
+      "scope": "Job 11",
+      "done_when": "`.jsonl` opens as an array; the shape over records; a jsonl write round-trips",
+      "tests": "table test; story `doc/open-jsonl.json`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "2–3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-big-files",
+      "scope": "Job 12, measure only",
+      "done_when": "a report with open time and RSS at three sizes, filed in o-plans",
+      "tests": "none (measurement)",
+      "repo": "o-json (scratch in `/tmp`)",
+      "depends": [
+        "none"
+      ],
+      "estimate": "2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-diff",
+      "scope": "Job 9, CLI",
+      "done_when": "`o-json diff` agrees with a jq-based check on test pairs",
+      "tests": "table tests",
+      "repo": "o-json",
+      "depends": [
+        "question 9"
+      ],
+      "estimate": "3–4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-format",
+      "scope": "Job 13, partial",
+      "done_when": "sort-keys and indent width; atomic `--out` (`writeAtomic`)",
+      "tests": "table tests",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "1–2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-yaml",
+      "scope": "Job 10",
+      "done_when": "read and export round-trip on samples",
+      "tests": "table tests",
+      "repo": "o-json",
+      "depends": [
+        "question 8"
+      ],
+      "estimate": "3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-schema",
+      "scope": "Job 15",
+      "done_when": "the schema validates the sample",
+      "tests": "table tests",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "3 h",
+      "plan": "plan.md"
+    }
+  ]
+}

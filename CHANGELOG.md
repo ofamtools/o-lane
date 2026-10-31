@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Define lanes from Markdown plan tables, with configurable column mappings, portable plan lookup, plan.define/plan.lanes and read-only directory parsing reports.
+- Preserve explicit empty JSON/table updates and reject duplicate definitions while keeping exact-name re-definition idempotent, actor-attributed and undoable.
+
 - Scaffold o-lane with an oden/ochazuke catalog shell, XDG data paths and public settings.
 - Add nested lane records, actor-attributed history, configurable states, typed properties, idempotent JSON batches, pane relations, state presets, links, retry copies and CLI snapshot/focus/yank verbs.
 - Add private per-root storage with process locking, atomic recovery, daily backups and undo; agent rights follow the catalog declarations and owner overrides.

@@ -6,6 +6,8 @@
 - `settings.go`: public defaults; lifecycle rows and configurable state presets, roles, links, watcher tags and later page/import/export declarations.
 - `model.go`: specs, lanes, pane refs, links, actor-attributed history; derived lifecycle times, estimates and root rollup.
 - `actor.go`: harness detection, per-run identity, the single framework override and store policy fallback; the app honours framework rights overrides.
+- `plan.go`: Goldmark table parsing, validated configurable column aliases, shared JSON/plan definition handler, exact plan relation queries and read-only directory checks.
+- `plan_test.go`, `testdata/plans/`: three copied table variants and golden specs; CLI/MCP rights, idempotency, source preservation and dry-run isolation regressions.
 - `changes.go`: atomic define/add, domain mutations, state presets, shared association handler, cycle refusal and undoable subtree delete.
 - `store.go`: process lock, per-root documents, transaction recovery, snapshots and actor-safe undo with append-only audit receipts.
 - `atomic.go`: private synced temporary writes, rename and directory sync (adapted from o-questions).

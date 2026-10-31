@@ -142,7 +142,9 @@ func (a *App) specs() []verbSpec {
 	fields["depends"] = ochazuke.Parameter{Type: "array", Description: "Dependencies, including external events"}
 	rows := []verbSpec{
 		{"lane", "add", "Create one lane; no parent creates a root", fields, []string{"name"}, false},
-		{"lane", "define", "Atomically define JSON lane specs; repeat by parent/name updates supplied fields", map[string]ochazuke.Parameter{"lanes": {Type: "array", Required: true, Description: "Lane spec objects; parents may appear in any order"}}, nil, false},
+		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false},
+		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false},
+		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true},
 		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}}, nil, true},
 		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}}, nil, true},
 		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
@@ -232,6 +234,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			p.Window = str("target")
 		}
 	}
+	if noun == "plan" && verb == "lanes" {
+		return a.planLanes(str("plan"))
+	}
 	switch verb {
 	case "add":
 		var spec Spec
@@ -241,12 +246,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		q, e := s.Add(spec)
 		return done(q, e)
 	case "define":
-		var specs []Spec
-		if e := decode(c.Args["lanes"], &specs); e != nil {
-			return done(nil, e)
-		}
-		q, e := s.Define(specs)
-		return done(q, e)
+		return a.define(c.Args)
 	case "list", "tree":
 		var rows []Lane
 		var e error

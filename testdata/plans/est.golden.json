@@ -1,0 +1,186 @@
+{
+  "path": "plan.md",
+  "name": "Example plan",
+  "lanes": [
+    {
+      "name": "o-json-keys-config",
+      "scope": "rows only: `!` → `jq.focus`; `x` → `value.delete`; `Z Z` → `viewer.save {quit}`; `Z Q` → `app.quit {force}`; `z a` → `ochazuke.outline.fold` on `shape`/`node`; `y y` → the existing yank verbs on `item`/`field`/`entry`/`line`/`shape`; `t` → `g t` for `node.array`/`node.object`; `hidden` on the node edit hints and plain-word hints on the reading rows; CHANGELOG",
+      "done_when": "`bindings check` is clean; the footer golden shows the reading hints first",
+      "tests": "`keys/bang-opens-jq`: `!` → title row `jq ▏`, query line focused; `keys/x-deletes`: `tab x` → `1 value edit` on the breadcrumb; `keys/za-folds`: `j z a` → the row's children hidden; `keys/g-t-array`: `g t` on a key → the node is `[]`, `t` on the edited tree does nothing; `keys/zz-writes-quits` (temp file); goldens `view-80/120`",
+      "repo": "o-json (`bindings.json`)",
+      "depends": [
+        "none"
+      ],
+      "estimate": "S, 1–2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-ochazuke-v059",
+      "scope": "bump ochazuke to v0.59.0 (match modes, colour pass, noun aliases); drop the workarounds TODO.md lists for it",
+      "done_when": "the o-json suite is green on v0.59",
+      "tests": "the existing 36+ stories; `follow/*`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "S, 1–2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-paste-asks",
+      "scope": "`viewer.paste` asks with a document open; the empty document pastes at once",
+      "done_when": "`p` on the original structure with a document asks; `n` keeps the document",
+      "tests": "`doc/paste-asks-with-document`: `T p` → confirm \"Replace the open document…?\", `n` → same breadcrumb; `doc/empty-state` unchanged",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "S, 1 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-next-kind",
+      "scope": "`viewer.next-kind`/`previous-kind {kind}` over both structures in drawing order, opening folds; rows `] t [ t ] c [ c ] o [ o ] a [ a ] s [ s ] n [ n ] b [ b ] z [ z ] ? [ ? ] ] [ [` with `from: steps`",
+      "done_when": "the owner's case takes `] t` from `.version` to `.nouns`; a count jumps N; at the last match it stays and says `no next table`",
+      "tests": "`kind/next-table-from-scalar`: catalog fixture, cursor `.version`, `] t` → breadcrumb `.nouns (array …)`, data pane `Table .nouns`; `kind/previous-collection`; `kind/count-3`; `kind/opens-fold`: `z M ] s` → the fold opened on the string row; `kind/at-end-says`",
+      "repo": "o-json",
+      "depends": [
+        "`o-json-keys-config`"
+      ],
+      "estimate": "S, 2–3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "ochazuke-outline-fold-all",
+      "scope": "`ochazuke.outline.open-all`/`close-all` (view state, not undoable); rows `z R`/`z M` (and `z o`/`z c` → `expand`/`collapse`) in `bindings/tree.json`; UX-RULES R11 lines",
+      "done_when": "the four keys work in the o-story outline; mtm's outline unchanged apart from the new keys; tagged",
+      "tests": "`tree/close-all`: `z M` → only roots drawn; `tree/open-all`; `TestOutlineFoldAll`; o-json picks it up with its next bump",
+      "repo": "ochazuke",
+      "depends": [
+        "none"
+      ],
+      "estimate": "S, 2 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-yank-parts",
+      "scope": "`part: path\\|key` on the yank verbs (one handler; concrete paths from `path.go`); `yank.path-style`; rows `y p`/`y k` on `item`/`field`/`entry`/`line`/`shape`/`node`; the `y p` hint",
+      "done_when": "`y p` on a cell copies `.data[3].customer.email`, on a structure row `.data[].customer.email`; `\"+y p` reaches the clipboard; `\"a y p` fills register a",
+      "tests": "`yank/path-of-cell`: `] t tab j j l l y p` → status `copied .data[2].customer`; `yank/path-structure`; `yank/path-pointer` (setting); `yank/register-a`; table test per noun",
+      "repo": "o-json",
+      "depends": [
+        "`o-json-keys-config`, question 3"
+      ],
+      "estimate": "S–M, 3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-search",
+      "scope": "`/` searches keys and values in both views with ochazuke's `Matcher` (`tab` cycles the mode), `n`/`N` in both views, `*`/`#` (`search-here`), `search.values`; the `/` row moves to search if question 1 is approved",
+      "done_when": "`/refunded⏎` lands on a `.data[].status` row with that value; `n` steps; `tab` shows `fuzzy`; an invalid regex says why on the search line",
+      "tests": "`search/value-match`: `/refunded ⏎` → breadcrumb `.data[].status`, data pane column highlighted; `search/n-edited-view`; `search/match-cycle`: `/ ref tab` → `fuzzy` tag; `search/star-key`; `search/regex-invalid-says-why`; `search/values-off`",
+      "repo": "o-json",
+      "depends": [
+        "`o-json-ochazuke-v059`, question 1"
+      ],
+      "estimate": "M, 4–5 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-descend",
+      "scope": "`field.show`/`value.show` on a collection: the structure cursor moves to the path (a shape path), or the query line takes the concrete path (`jq.set`, under an array); `data.enter`; the detail stays on `#` and the palette",
+      "done_when": "`enter` on `nouns` in `Fields .` shows `Table .nouns`; `h` in the structure goes back; `data.enter detail` is today",
+      "tests": "`data/enter-shows-table`: catalog fixture, `tab`, move to `nouns`, `enter` → `Table .nouns`, structure cursor on `nouns`; `data/enter-under-array` → query line `.data[3].items`; `data/enter-detail-setting`",
+      "repo": "o-json",
+      "depends": [
+        "question 5"
+      ],
+      "estimate": "M, 3–4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-write-in-place",
+      "scope": "`:w` with no name writes the source per `write.source`; `indent` parameter; `write.indent`, `write.sort-keys`; `Z Z` then writes in place",
+      "done_when": "`:w⏎` on an edited file replaces it atomically (one confirm per question 2); `:w --indent 0` writes one line",
+      "tests": "`write/colon-w-in-place` (temp file, md5 before and after); `write/indent-0`; `write/source-new-file-setting`",
+      "repo": "o-json",
+      "depends": [
+        "question 2; `o-json-key-order` before it is the default"
+      ],
+      "estimate": "S–M, 3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-key-order",
+      "scope": "the tutorials plan's lane (the identity keeps document order per item)",
+      "done_when": "an unedited `:w` writes what was read, modulo indentation",
+      "tests": "`inplace/identity-keeps-order`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "M, 3–4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-broken-excerpt + g F",
+      "scope": "the tutorials plan's excerpt lane, plus `g F`: first try an `actions.json` row (document it in the README if it works), else `doc.edit {line, column}`",
+      "done_when": "the data pane shows the line and a caret; `g F` opens `$EDITOR +3 FILE` (stub editor in the test)",
+      "tests": "`doc/broken-excerpt`: open the trailing-comma fixture → excerpt with `^` under column 14; `doc/broken-g-F` (stub `$EDITOR` records its arguments); `doc/broken-excerpt-off`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "S, 2–3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-sort-count",
+      "scope": "`rows.sort {column, reverse}` as view state with the title arrow; `rows.count {column}` through `jq.set`; `restructure.sort-keys`; aliases `sort`, `sort!`, `count`; export writes the sorted order",
+      "done_when": "`:sort!` on `total` orders the rows descending with `▼` in the title; `:count` on `status` shows `status · count` rows and the query in the query line",
+      "tests": "`table/sort-reverse`: `] t tab` to `total`, `:sort! ⏎` → first row is the largest total; `table/count-status`; `structure/sort-keys-undo`: `:sort ⏎ u` → original order",
+      "repo": "o-json",
+      "depends": [
+        "`o-json-keys-config`"
+      ],
+      "estimate": "M, 4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-jsonl",
+      "scope": "the tutorials plan's lane",
+      "done_when": "`.jsonl` opens as a table",
+      "tests": "`doc/open-jsonl`: open → breadcrumb `JSON Lines`, `tab` → `Table .`",
+      "repo": "o-json",
+      "depends": [
+        "none"
+      ],
+      "estimate": "M, 2–3 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-map-table",
+      "scope": "an object whose values are all objects shows as a table with a `key` column (`data.map-table`); a map of plain values stays fields, titled `Fields .aliases  63 keys`",
+      "done_when": "a map of records draws as a table; `off` is today",
+      "tests": "`data/map-of-records-table`; `data/map-of-strings-fields`; `data/map-table-off`",
+      "repo": "o-json",
+      "depends": [
+        "question 6"
+      ],
+      "estimate": "M, 4 h",
+      "plan": "plan.md"
+    },
+    {
+      "name": "o-json-cheatsheet-jobs",
+      "scope": "the cheat sheet above, generated, in README and GUIDE; the tutorials plan's tapes use it",
+      "done_when": "`TestCheatSheet` covers every row",
+      "tests": "`TestCheatSheet`",
+      "repo": "o-json",
+      "depends": [
+        "the lanes whose keys it lists (rows marked \"not yet\" until then)"
+      ],
+      "estimate": "S, 1–2 h",
+      "plan": "plan.md"
+    }
+  ]
+}
