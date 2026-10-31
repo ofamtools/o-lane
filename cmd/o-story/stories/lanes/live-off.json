@@ -1,0 +1,52 @@
+{
+  "name": "lanes/live-off",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation",
+        "wording": "Keep the owner words"
+      }
+    ],
+    "start": "Implementation",
+    "associations": [
+      {
+        "lane": "Implementation",
+        "pane": {
+          "session": "s",
+          "window": "w1",
+          "role": "implementer"
+        }
+      },
+      {
+        "lane": "Implementation",
+        "pane": {
+          "session": "s",
+          "window": "w2",
+          "role": "reviewer"
+        }
+      }
+    ]
+  },
+  "values": {
+    "lanes.live": false
+  },
+  "script": [
+    "j"
+  ],
+  "expect": [
+    {
+      "after": 0,
+      "contains": [
+        "Implementation",
+        "running",
+        "Keep the owner words"
+      ],
+      "lacks": [
+        "needs input"
+      ]
+    }
+  ]
+}

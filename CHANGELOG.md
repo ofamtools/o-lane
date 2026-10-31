@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Derive live lane/subtree state from explicit tuios window snapshots and a cancellable standalone subscription, with seq/boot resume, gap recovery, disconnect handling and retained closed-pane references.
+- Add configurable live names, tones and glyphs, precedence and aggregate roles, combined lifecycle/live cells, per-pane live detail and live/colour opt-outs. Preserve existing string-only state mappings; live reads never write lane history.
+- Include live projections in CLI/MCP read answers and portable page rows. Mounted extensions use fresh snapshots on row fetch; persistent hosted subscriptions await a general catalog transport hook.
+
 - Define lanes from Markdown plan tables, with configurable column mappings, portable plan lookup, plan.define/plan.lanes and read-only directory parsing reports.
 - Preserve explicit empty JSON/table updates and reject duplicate definitions while keeping exact-name re-definition idempotent, actor-attributed and undoable.
 - Add the standalone and portable Lanes tree page with configurable lifecycle tones, derived durations, pane-role/agent columns, Markdown/fields/history detail sections and a read-only record viewer.

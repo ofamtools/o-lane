@@ -1,0 +1,3 @@
+{"type":"subscribed","seq":20,"boot_id":"boot-a","replayed":1}
+{"type":"agent-state","seq":16,"boot_id":"boot-a","session":"s","window":"w2","state":"errored"}
+{"type":"agent-state","seq":21,"boot_id":"boot-a","session":"s","window":"w1","state":"working"}

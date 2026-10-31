@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+# The fixture lives on PATH inside t.TempDir under the driver's TMPDIR.
+# Never fall through to an installed tuios.
+printf '%s\n' "$*" >> "$LANE_STUB_DIR/calls"
+case "$1" in
+ list-windows)
+  printf 'snapshot\n' >> "$LANE_STUB_DIR/snapshots"
+  if [ "${LANE_STUB_STORY:-}" = 1 ]; then
+   printf '%s\n' '{"windows":[{"window_id":"w1","agent_state":"working"},{"window_id":"w2","agent_state":"needs_input"}]}'
+  else
+   printf '%s\n' '{"windows":[{"window_id":"w1","agent_state":"idle"},{"window_id":"w2","agent_state":"needs_input"}]}'
+  fi
+  ;;
+ subscribe)
+  case " $* " in
+   *' --after-seq '*)
+    cat "$LANE_STUB_DIR/resume.ndjson"
+    while [ ! -f "$LANE_STUB_DIR/close" ]; do sleep 0.05; done
+    printf '%s\n' '{"type":"window-closed","seq":22,"boot_id":"boot-a","session":"s","window":"w2"}'
+    while [ ! -f "$LANE_STUB_DIR/close-all" ]; do sleep 0.05; done
+    printf '%s\n' '{"type":"window-closed","seq":23,"boot_id":"boot-a","session":"s","window":"w1"}'
+    exec sleep 30
+    ;;
+   *) cat "$LANE_STUB_DIR/subscribe.ndjson" ;;
+  esac
+  ;;
+ *) printf 'unexpected stub tuios command\n' >&2; exit 1 ;;
+esac

@@ -1,0 +1,5 @@
+{"type":"subscribed","seq":10,"boot_id":"boot-a"}
+{"type":"agent-state","seq":11,"boot_id":"boot-a","session":"s","window":"w1","state":"needs_input"}
+{"type":"gap","reason":"overflow","dropped":3,"boot_id":"boot-a"}
+{"type":"agent-state","seq":14,"boot_id":"boot-a","session":"s","window":"w2","state":"needs_input"}
+{"type":"agent-state","seq":15,"boot_id":"boot-a","session":"s","window":"w1","state":"idle"}

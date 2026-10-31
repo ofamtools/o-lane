@@ -59,7 +59,8 @@ func (a *App) registerPage() error {
 			return done(nil, e)
 		}
 		s, o := *a.store, a.pageOptions()
-		return ochazuke.Pending(func(context.Context) (any, error) { return laneRows(&s, o) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
+		reader, run := a.reader, commandRunner(a.run)
+		return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
 			if a.rowsLoaded != nil {
 				rows, _ := value.([]ocli.Row)
 				a.rowsLoaded(rows, e)
@@ -85,14 +86,18 @@ func (a *App) registerPage() error {
 type pageOptions struct {
 	tree, guides, durations, panes, history, tones, detail, hideClosed bool
 	now                                                                time.Time
+	live                                                               liveOptions
+	liveTones                                                          bool
+	liveRows                                                           map[string]Live
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
-	return pageOptions{tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now()}
+	live, _ := a.liveOptions()
+	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now()}
 }
 func (o pageOptions) columns() []ochazuke.Column {
-	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Width: 11, Priority: 1}, {Title: "Repo", Max: 24, Priority: 4}, {Title: "Estimate", Width: 9, Priority: 5}}
+	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}, {Title: "Repo", Max: 24, Priority: 4}, {Title: "Estimate", Width: 9, Priority: 5}}
 	if o.durations {
 		cols = append(cols, ochazuke.Column{Title: "Elapsed / duration", Width: 18, Priority: 3})
 	}
@@ -107,7 +112,7 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 		return p
 	}
 	fields := []ocli.CatalogDetailField{}
-	for _, name := range []string{"id", "name", "parent", "state", "rolled_state", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
+	for _, name := range []string{"id", "name", "parent", "state", "rolled_state", "live_state", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
 		fields = append(fields, ocli.CatalogDetailField{Label: strings.ReplaceAll(name, "_", " "), Field: name})
 	}
 	p.Detail = &ocli.CatalogDetail{Fields: []string{"name", "state", "wording", "scope", "done_when", "repo", "branch", "worktree", "estimate", "depends", "links", "panes"}, Sections: []ocli.CatalogDetailSection{
@@ -124,6 +129,34 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 	return p
 }
 
+func allPanes(rows []Lane) []Pane {
+	panes := []Pane{}
+	for _, q := range rows {
+		panes = append(panes, q.Panes...)
+	}
+	return panes
+}
+func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveReader, run commandRunner) ([]ocli.Row, error) {
+	rows, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	if o.live.on {
+		panes := allPanes(rows)
+		var snapshots liveSnapshots
+		if reader != nil {
+			snapshots = reader.current(panes)
+		} else {
+			snapshots = snapshotScopes(ctx, panes, run)
+		}
+		o.liveRows = map[string]Live{}
+		for _, q := range rows {
+			o.liveRows[q.ID] = aggregateLive(panesInSubtree(rows, q), o.live, snapshots)
+		}
+	}
+	return projectLaneRows(s, o, rows)
+}
+
 // The page is a projection only: durations, root rollup and presentation never
 // write derived values back into the store. A single read supplies the tree.
 func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
@@ -131,6 +164,10 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 	if e != nil {
 		return nil, e
 	}
+	return projectLaneRows(s, o, lanes)
+}
+func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) {
+	var e error
 	sort.SliceStable(lanes, func(i, j int) bool {
 		if lanes[i].Created.Equal(lanes[j].Created) {
 			return lanes[i].ID > lanes[j].ID
@@ -150,6 +187,14 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 			}
 			state := v.RolledState
 			cells := []string{q.Name, state, q.Repo, q.Estimate}
+			live, hasLive := o.liveRows[q.ID]
+			showLive := hasLive && o.live.on && s.states()[q.State].Open
+			if showLive {
+				cells[1] += " · " + live.State
+				if live.Glyph != "" {
+					cells[0] = live.Glyph + " " + q.Name
+				}
+			}
 			duration := ""
 			if o.durations {
 				if v.Started != nil {
@@ -175,7 +220,16 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 				if window == "" {
 					window = "unassociated"
 				}
-				paneDetail = append(paneDetail, fmt.Sprintf("- %s: %s · %s · session %s · since %s", p.Role, window, agent, p.Session, p.Since.Format(time.RFC3339)))
+				liveText := ""
+				if hasLive && o.live.on {
+					for _, lp := range live.Panes {
+						if lp.Pane == p {
+							liveText = " · " + lp.State
+							break
+						}
+					}
+				}
+				paneDetail = append(paneDetail, fmt.Sprintf("- %s: %s · %s · session %s · since %s", p.Role, window, agent, p.Session, p.Since.Format(time.RFC3339))+liveText)
 			}
 			keys := make([]string, 0, len(roles))
 			for role := range roles {
@@ -201,6 +255,10 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 			if err != nil {
 				e = err
 				return
+			}
+			if hasLive && o.live.on {
+				data["live"] = live
+				data["live_state"] = live.State
 			}
 			data["pane_detail"] = strings.Join(paneDetail, "\n")
 			if len(paneDetail) == 0 {
@@ -240,7 +298,17 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 				row.Parent = q.Parent
 			}
 			if o.tones {
-				row.Tones = []ochazuke.ToneSpan{{Cell: 1, Tone: s.states()[state].Tone}}
+				span := ochazuke.CellTone(1, s.states()[state].Tone)
+				if showLive {
+					span.To = len([]rune(state))
+				}
+				row.Tones = []ochazuke.ToneSpan{span}
+			}
+			if showLive && o.liveTones && live.Tone != "" {
+				row.Tones = append(row.Tones, ochazuke.SpanTone(1, len([]rune(state))+3, 0, live.Tone))
+				if live.Glyph != "" {
+					row.Tones = append(row.Tones, ochazuke.SpanTone(0, 0, len([]rune(live.Glyph)), live.Tone))
+				}
 			}
 			out = append(out, row)
 			walk(q.ID)

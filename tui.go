@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,12 +16,18 @@ import (
 )
 
 type page struct {
-	a     *App
-	m     *ochazuke.Model
-	v     *ocli.PageView
-	dirty bool
+	a             *App
+	m             *ochazuke.Model
+	v             *ocli.PageView
+	dirty         bool
+	streaming     bool
+	cancelLive    context.CancelFunc
+	readerContext context.Context
+	liveDone      chan struct{}
+	generation    uint64
 }
 type pageTick struct{}
+type liveChanged struct{ generation uint64 }
 
 func mountPage(a *App) (*page, error) {
 	if e := a.configure(); e != nil {
@@ -49,6 +56,16 @@ func mountPage(a *App) (*page, error) {
 		return nil, e
 	}
 	p := &page{a: a, m: m, v: v}
+	// The initial projection seeds the cache before the first frame. Its reader
+	// starts only for an interactive page, never for catalog/CLI/smoke calls.
+	if a.r.Settings().Bool("lanes.live") {
+		lanes, err := a.store.List()
+		if err != nil {
+			return nil, err
+		}
+		panes := allPanes(lanes)
+		a.reader = newLiveReader(a.run, panes, snapshotScopes(context.Background(), panes, a.run))
+	}
 	a.changed = func() { p.dirty = true }
 	a.rowsLoaded = func(rows []ocli.Row, err error) {
 		if err == nil {
@@ -58,21 +75,18 @@ func mountPage(a *App) (*page, error) {
 			a.r.UI().Status(err.Error())
 		}
 	}
-	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail"} {
+	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.live-tones", "lanes.live-states", "lanes.live-precedence", "lanes.live-roles"} {
 		a.r.Settings().Observe(name, func(string, any) { p.dirty = true })
 	}
 	a.showUI = func(q View) error {
-		rows, e := laneRows(a.store, a.pageOptions())
-		if e != nil {
-			return e
-		}
-		for _, row := range rows {
-			if row.ID == q.ID {
-				return openLaneDetail(a.r, q.Name, row.Data)
+		for _, item := range p.v.List(listID).Items() {
+			if item.ID == listID+"/"+q.ID {
+				return openLaneDetail(a.r, q.Name, item.Props)
 			}
 		}
 		return nil
 	}
+
 	quit := ochazuke.Do("app.quit")
 	quit.Instance = pageID
 	quit.Mode = "normal"
@@ -83,7 +97,7 @@ func mountPage(a *App) (*page, error) {
 	if e = a.r.OpenPage(pageID); e != nil {
 		return nil, e
 	}
-	rows, e := laneRows(a.store, a.pageOptions())
+	rows, e := loadLaneRows(context.Background(), a.store, a.pageOptions(), a.reader, a.run)
 	if e != nil {
 		return nil, e
 	}
@@ -113,15 +127,78 @@ func (p *page) tick() tea.Cmd {
 	}
 	return tea.Tick(every, func(time.Time) tea.Msg { return pageTick{} })
 }
-func (p *page) Init() tea.Cmd { return tea.Batch(p.m.Init(), p.a.r.PendingCommands(), p.tick()) }
+func (p *page) Init() tea.Cmd {
+	return tea.Batch(p.m.Init(), p.a.r.PendingCommands(), p.tick(), p.syncLive())
+}
+func (p *page) stopLive() {
+	if p.cancelLive != nil {
+		p.cancelLive()
+		p.cancelLive = nil
+	}
+	p.a.reader = nil
+	p.generation++
+}
+func (p *page) syncLive() tea.Cmd {
+	if !p.streaming {
+		return nil
+	}
+	if !p.a.r.Settings().Bool("lanes.live") {
+		if p.cancelLive != nil {
+			p.stopLive()
+		}
+		return nil
+	}
+	if p.cancelLive != nil {
+		return nil
+	}
+	p.generation++
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancelLive = cancel
+	p.readerContext = ctx
+	reader := p.a.reader
+	if reader == nil {
+		reader = newLiveReader(p.a.run, nil, liveSnapshots{})
+		p.a.reader = reader
+	}
+	previous := p.liveDone
+	p.liveDone = make(chan struct{})
+	done := p.liveDone
+	go func() {
+		defer close(done)
+		if previous != nil {
+			<-previous
+		}
+		reader.Run(ctx)
+	}()
+	return p.waitLive(reader, p.generation, ctx)
+}
+func (p *page) waitLive(reader *liveReader, generation uint64, ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case <-reader.changed:
+			return liveChanged{generation}
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
 func (p *page) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if change, ok := msg.(liveChanged); ok {
+		if change.generation != p.generation || p.cancelLive == nil {
+			return p, nil
+		}
+		reader := p.a.reader
+		// The wait is cancelled with the reader; keep its context independent of
+		// framework jobs so cancelling a replaced row load cannot stop the stream.
+		return p, tea.Batch(p.reload(), p.waitLive(reader, p.generation, p.readerContext))
+	}
 	if _, ok := msg.(pageTick); ok {
 		return p, tea.Batch(p.reload(), p.tick())
 	}
 	_, cmd := p.m.Update(msg)
 	if p.dirty {
 		p.dirty = false
-		cmd = tea.Batch(cmd, p.reload())
+		cmd = tea.Batch(cmd, p.syncLive(), p.reload())
 	}
 	return p, cmd
 }
@@ -150,6 +227,13 @@ func runTUI(a *App, args []string) error {
 		_, e = fmt.Fprintln(a.out, strings.TrimRight(ansi.Strip(p.m.View().Content), "\n"))
 		return e
 	}
+	p.streaming = true
+	defer func() {
+		p.stopLive()
+		if p.liveDone != nil {
+			<-p.liveDone
+		}
+	}()
 	_, e = tea.NewProgram(p, tea.WithInput(a.in), tea.WithOutput(a.out)).Run()
 	return e
 }
@@ -183,7 +267,7 @@ func openLaneDetail(r *ochazuke.Runtime, title string, data any) error {
 func laneDetailText(value any) string {
 	data, _ := value.(map[string]any)
 	var text strings.Builder
-	for _, name := range []string{"name", "state", "wording", "scope", "done_when", "pane_detail", "repo", "base", "branch", "worktree", "estimate", "duration", "depends", "plan", "task", "tests", "links", "started", "finished"} {
+	for _, name := range []string{"name", "state", "live_state", "wording", "scope", "done_when", "pane_detail", "repo", "base", "branch", "worktree", "estimate", "duration", "depends", "plan", "task", "tests", "links", "started", "finished"} {
 		v := data[name]
 		if v == nil || v == "" {
 			continue

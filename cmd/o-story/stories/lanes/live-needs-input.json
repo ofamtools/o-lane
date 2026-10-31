@@ -1,0 +1,47 @@
+{
+  "name": "lanes/live-needs-input",
+  "app": "o-lane",
+  "width": 160,
+  "height": 42,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Implementation",
+        "wording": "Keep the owner words"
+      }
+    ],
+    "start": "Implementation",
+    "associations": [
+      {
+        "lane": "Implementation",
+        "pane": {
+          "session": "s",
+          "window": "w1",
+          "role": "implementer"
+        }
+      },
+      {
+        "lane": "Implementation",
+        "pane": {
+          "session": "s",
+          "window": "w2",
+          "role": "reviewer"
+        }
+      }
+    ]
+  },
+  "values": {},
+  "script": [
+    "j"
+  ],
+  "expect": [
+    {
+      "after": 0,
+      "contains": [
+        "Implementation",
+        "running \u00b7 needs input",
+        "Keep the owner words"
+      ]
+    }
+  ]
+}

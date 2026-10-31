@@ -28,6 +28,7 @@ type App struct {
 	changed     func()
 	showUI      func(View) error
 	rowsLoaded  func([]ocli.Row, error)
+	reader      *liveReader
 }
 type verbSpec struct {
 	noun, name, description string
@@ -52,6 +53,10 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		}
 		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 		cmd.WaitDelay = 500 * time.Millisecond
+		if writer, ok := ctx.Value(commandOutputKey{}).(io.Writer); ok {
+			cmd.Stdout = writer
+			return nil, cmd.Run()
+		}
 		return cmd.Output()
 	}
 	a.store.Warn = func(message string) { fmt.Fprintln(errOut, message) }
@@ -163,7 +168,7 @@ func (a *App) specs() []verbSpec {
 		{"lane", "start", "Start a lane, optionally recording a pane or pane-less agent", common(map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "branch": param("Branch"), "worktree": param("Worktree path")}), []string{"target"}, false},
 		{"lane", "state", "Record any configured state; from-tag uses lanes.tag-states", common(map[string]ochazuke.Parameter{"state": param("Lifecycle state"), "note": param("History note"), "from-tag": param("Watcher tag; unmapped tags append notes")}), []string{"target", "state"}, false},
 		{"lane", "note", "Append a history note", common(map[string]ochazuke.Parameter{"text": required("Note")}), []string{"target", "text"}, false},
-		{"lane", "live", "Read a snapshot of associated panes' live state", common(nil), []string{"target"}, true},
+		{"lane", "live", "Read each pane and the aggregate live state of the lane subtree", common(nil), []string{"target"}, true},
 		{"lane", "focus-pane", "Focus an associated pane using the configured argv", common(map[string]ochazuke.Parameter{"role": param("Optional role filter")}), []string{"target"}, true},
 		{"lane", "yank-id", "Copy the lane ID to the framework register", common(nil), []string{"target"}, true},
 		{"lane", "yank-path", "Copy the worktree path to the framework register", common(nil), []string{"target"}, true},
@@ -322,7 +327,8 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 				}
 			}
 		}
-		return done(out, nil)
+		e = a.enrichLive(out)
+		return done(out, e)
 	case "show", "history", "live", "focus-pane", "yank-id", "yank-path":
 		q, e := s.Resolve(target)
 		if e != nil {
@@ -349,7 +355,13 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 				return done(nil, e)
 			}
 		}
-		return done(s.view(q, rows), e)
+		v := s.view(q, rows)
+		if e == nil && a.showUI == nil {
+			views := []View{v}
+			e = a.enrichLive(views)
+			v = views[0]
+		}
+		return done(v, e)
 	case "set":
 		q, e := s.Set(target, str("prop"), str("value"))
 		return done(q, e)

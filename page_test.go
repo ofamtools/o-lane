@@ -55,8 +55,12 @@ func pageFixture(t *testing.T) *App {
 func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 	t.Helper()
 	var seed struct {
-		Lanes []Spec
-		Start string
+		Lanes        []Spec
+		Start        string
+		Associations []struct {
+			Lane string
+			Pane Pane
+		}
 	}
 	if e := json.Unmarshal(raw, &seed); e != nil {
 		t.Fatal(e)
@@ -67,6 +71,11 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 	if seed.Start != "" {
 		if _, e := a.store.Start(seed.Start, Pane{}, "", ""); e != nil {
 			t.Fatal(e)
+		}
+	}
+	for _, association := range seed.Associations {
+		if _, err := a.store.Associate(association.Lane, association.Pane, false); err != nil {
+			t.Fatal(err)
 		}
 	}
 	a.store.Now = func() time.Time { return time.Date(2026, 1, 1, 13, 30, 0, 0, time.UTC) }
@@ -82,6 +91,15 @@ func TestLaneStories(t *testing.T) {
 			lib := monogatari.Library{Stories: stories, Apps: []monogatari.App{{Name: "o-lane", Fixtures: []monogatari.Fixture{{Name: "lanes", Build: func(env monogatari.Env) (monogatari.Built, error) {
 				a = pageFixture(t)
 				seedPage(t, a, env.Seed)
+				if strings.HasPrefix(env.Story.Name, "lanes/live-") {
+					stubTuios(t)
+					t.Setenv("LANE_STUB_STORY", "1")
+					production, err := newApp(a.dir, &bytes.Buffer{}, &bytes.Buffer{}, &bytes.Buffer{})
+					if err != nil {
+						return monogatari.Built{}, err
+					}
+					a.run = production.run
+				}
 				for name, value := range env.Story.Values {
 					if e := a.r.Settings().Set(name, value); e != nil {
 						return monogatari.Built{}, e
@@ -108,6 +126,11 @@ func TestLaneStories(t *testing.T) {
 					t.Log(step.Event.String(), ansi.Strip(step.After))
 				}
 				t.Fatalf("%v\n%v", res.Err, res.Failed)
+			}
+			if story.Name == "lanes/live-off" {
+				if data, err := os.ReadFile(filepath.Join(os.Getenv("LANE_STUB_DIR"), "calls")); err == nil {
+					t.Fatalf("live off ran tuios: %s", data)
+				}
 			}
 			if strings.HasSuffix(story.Name, "state-change") {
 				q, e := a.store.Resolve("Implementation")
