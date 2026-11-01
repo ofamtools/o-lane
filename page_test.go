@@ -26,7 +26,7 @@ func pageFixture(t *testing.T) *App {
 	t.Helper()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") {
+		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") {
 			t.Setenv(key, "")
 		}
 	}

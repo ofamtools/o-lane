@@ -14,7 +14,7 @@ func fixture(t *testing.T) string {
 	base := t.TempDir()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "MTM_") {
+		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") || strings.HasPrefix(key, "MTM_") {
 			t.Setenv(key, "")
 		}
 	}
