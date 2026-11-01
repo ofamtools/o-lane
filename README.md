@@ -19,6 +19,7 @@ Data lives in `$XDG_DATA_HOME/o-lane` (default `~/.local/share/o-lane`); newly c
 ## Install
 
 ```sh
+go install ofam.dev/oden/cmd/o@latest   # oden's o: o lane runs o-lane, no dash needed
 go install ofam.dev/o-lane@latest
 mtm extension register lane      # mounts the Lanes page and the lane.* verbs in mtm
 ```
@@ -26,20 +27,20 @@ mtm extension register lane      # mounts the Lanes page and the lane.* verbs in
 ## Usage
 
 ```sh
-o-lane lane define --project app --lanes '[{"name":"readme"},{"name":"logo","parent":"readme"}]'
-o-lane lane start logo                     # planned -> running
-o-lane lane associate logo --pane WINDOW_ID
-o-lane lane note logo "logo C picked"
-o-lane lane state logo review
-o-lane lane finish logo
-o-lane lane rows --format table            # the page's columns
-o-lane lane tree --state running,review    # JSON; matches keep their ancestors
-o-lane                                     # the Lanes page
-o-lane lane --help                         # every verb and its parameters
+o lane lane define --project app --lanes '[{"name":"readme"},{"name":"logo","parent":"readme"}]'
+o lane lane start logo                     # planned -> running
+o lane lane associate logo --pane WINDOW_ID
+o lane lane note logo "logo C picked"
+o lane lane state logo review
+o lane lane finish logo
+o lane lane rows --format table            # the page's columns
+o lane lane tree --state running,review    # JSON; matches keep their ancestors
+o lane                                     # the Lanes page
+o lane lane --help                         # every verb and its parameters
 ```
 
 ```text
-$ o-lane lane rows --format table          # a review lane with no pane associated
+$ o lane lane rows --format table          # a review lane with no pane associated
 Name    State                  Project  Repo  Estimate  Elapsed / duration  Panes         Agents
 readme  review · unassociated  app                                          unassociated
 logo    review · unassociated  app                      <1m                 unassociated
@@ -51,7 +52,7 @@ Every answer is JSON unless `--format` asks for a table. Add `--data DIR` to try
 
 The `lane` noun supports add, define, list, tree, show, history, set, get, rename, reword, move, copy, start, state, park, review, merge, finish, cancel, reopen, note, link, unlink, associate, unassociate, live, focus-pane, yank-id, yank-path, delete and undo. Discover parameters in the schema-1 catalog or noun help. `set` and `get` use the framework's standard typed-property grammar, including multi-property writes. `pane.associate`, `pane.unassociate` and `pane.lanes` expose the reverse relation using the same association handler; `agent.associate`, `agent.unassociate`, `agent.lanes`, `agent.live` and `agent.list` do the same for harness sub-agents (see Agents).
 
-Every lane belongs to a project. A project is a reference only, an id or name with an optional host kind (`mtm:<id>`, `o-lane`); o-lane keeps no project store and does not need mtm. A lane's own `project` wins; otherwise it inherits the nearest ancestor's, so a root's project covers its subtree. Answers include `effective_project`, `project_from` and `project_association` (associated, inherited or unassociated). A missing project records the lane as unassociated and is never refused, but agents should always set one: `o-lane lane define --project PROJECT --lanes '[...]'` (the batch's top lanes take it), `lane add --project`, `plan define PATH --project` (the root takes it), or `set PROJECT` later. `lane associate --project P` and `lane unassociate --project P` share the relation handler with `project associate P LANE` / `project unassociate P LANE`; associating a root sets the project for its subtree, which is also how existing records migrate. A pane and project in one associate call share one undo. `lane list --project P`, `lane tree --project P`, `lane rows --project P` and `project lanes P` filter by effective project; a reference without a kind matches the same id or name under any kind. `project list` lists recorded references and, when `lanes.project-source` is `mtm` (the default when `mtm` is on PATH, else `none`), the names `mtm project list` returns through the injectable runner. That source is used only for completion (`project.choices` backs every project form field, free text allowed) and listing; it never validates writes.
+Every lane belongs to a project. A project is a reference only, an id or name with an optional host kind (`mtm:<id>`, `o-lane`); o-lane keeps no project store and does not need mtm. A lane's own `project` wins; otherwise it inherits the nearest ancestor's, so a root's project covers its subtree. Answers include `effective_project`, `project_from` and `project_association` (associated, inherited or unassociated). A missing project records the lane as unassociated and is never refused, but agents should always set one: `o lane lane define --project PROJECT --lanes '[...]'` (the batch's top lanes take it), `lane add --project`, `plan define PATH --project` (the root takes it), or `set PROJECT` later. `lane associate --project P` and `lane unassociate --project P` share the relation handler with `project associate P LANE` / `project unassociate P LANE`; associating a root sets the project for its subtree, which is also how existing records migrate. A pane and project in one associate call share one undo. `lane list --project P`, `lane tree --project P`, `lane rows --project P` and `project lanes P` filter by effective project; a reference without a kind matches the same id or name under any kind. `project list` lists recorded references and, when `lanes.project-source` is `mtm` (the default when `mtm` is on PATH, else `none`), the names `mtm project list` returns through the injectable runner. That source is used only for completion (`project.choices` backs every project form field, free text allowed) and listing; it never validates writes.
 
 ## Defining lanes from JSON and plans
 
@@ -73,7 +74,7 @@ Pane refs include host, session, window, role and optional harness/model/agent. 
 
 ## Agents (subagents inside one pane)
 
-Lanes are often run by harness sub-agents, several inside one pane (Claude Code subagents today; Codex or omp sub-agents are new data rows). Associate a lane with the agent, not only its pane: `o-lane lane associate LANE --agent-id ID --harness claude-code [--agent-session S] [--agent ofam-lane] [--role R]`. `agent associate ID LANE`, `agent unassociate ID LANE` and `agent lanes ID` are the agent-side view of the same relation and share its handler; `lane unassociate LANE --agent-id ID` removes it. A participant that names an agent is keyed by harness and agent id (re-associating updates it), so an agent and the pane it runs in can both be recorded. The Claude Code agent id is the `agentId` the Agent tool reports (also the `agent-<id>.jsonl` transcript name). Agent ids must be simple (letters, digits, `_ . -`). Undo restores agent relations like any other change.
+Lanes are often run by harness sub-agents, several inside one pane (Claude Code subagents today; Codex or omp sub-agents are new data rows). Associate a lane with the agent, not only its pane: `o lane lane associate LANE --agent-id ID --harness claude-code [--agent-session S] [--agent ofam-lane] [--role R]`. `agent associate ID LANE`, `agent unassociate ID LANE` and `agent lanes ID` are the agent-side view of the same relation and share its handler; `lane unassociate LANE --agent-id ID` removes it. A participant that names an agent is keyed by harness and agent id (re-associating updates it), so an agent and the pane it runs in can both be recorded. The Claude Code agent id is the `agentId` the Agent tool reports (also the `agent-<id>.jsonl` transcript name). Agent ids must be simple (letters, digits, `_ . -`). Undo restores agent relations like any other change.
 
 Agent live state is derived from data, never stored: `lanes.agent-harnesses` maps a harness name to a row with `transcripts` (path templates; `{agent}` and `{session}` are substituted, `{session}` is `*` when unknown, then `~`, `$VAR` and `${VAR:-default}` expand and the result is globbed), `time_field` (the RFC 3339 field of a transcript line; empty uses the file's modification time), optional `idle`, `events` (hook event name to `start`/`stop`) and `fields` (hook payload field names for event, agent, session, type, transcript). The default row reads Claude Code's `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/*/<session>/subagents/agent-<id>.jsonl`. States are:
 
@@ -84,16 +85,16 @@ Agent live state is derived from data, never stored: `lanes.agent-harnesses` map
 
 Reads stat and tail (64 KiB) each transcript once per refresh, off the UI loop; the hook log is read incrementally. Agent states use `lanes.live-states` words, tones and glyphs (a `missing` row is added) and join the lane's live aggregate, so an open lane shows `running · working`. The Agents column shows each agent with its state and last-activity age (`claude-code ofam-lane a3f09c2e · working 2m`); pane detail adds the full agent id, agent session and activity time. `agent live ID` reads one agent, `agent list` lists every agent the hook recorded, newest first. `lanes.agent-live=false` turns agent reads off.
 
-`o-lane agent-hook HARNESS [EVENT]` records a hook payload from stdin as one appended line in `agent-events.jsonl` in the data directory. It never takes the store lock, reads at most 1 MiB for at most 2s, ignores events the row does not map, refuses unsafe ids, prints nothing on stdout and always exits 0 (errors go to stderr), so it cannot break the harness. The event argument overrides the payload's event field.
+`o lane agent-hook HARNESS [EVENT]` records a hook payload from stdin as one appended line in `agent-events.jsonl` in the data directory. It never takes the store lock, reads at most 1 MiB for at most 2s, ignores events the row does not map, refuses unsafe ids, prints nothing on stdout and always exits 0 (errors go to stderr), so it cannot break the harness. The event argument overrides the payload's event field.
 
 Install the hook with ochazuke's shared setup verbs. o-lane declares two setup items (group `claude-code`), `claude-subagent-start` and `claude-subagent-stop`, which add `{"hooks":[{"type":"command","command":"o-lane agent-hook claude-code","timeout":5}]}` to `hooks.SubagentStart` and `hooks.SubagentStop` in `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`, beside existing entries (such as tuios's). They own only entries whose first command contains `o-lane agent-hook`.
 
 ```sh
-o-lane setup                                  # status: installed / missing / n/a
-o-lane setup plan                             # dry run: the whole resulting file, nothing written
-o-lane setup install --yes                    # or: o-lane setup install --group claude-code --yes
-o-lane setup uninstall --yes                  # removes only o-lane's entries
-o-lane setup status --home /tmp/fixture-home  # any command against another home (tests)
+o lane setup                                  # status: installed / missing / n/a
+o lane setup plan                             # dry run: the whole resulting file, nothing written
+o lane setup install --yes                    # or: o lane setup install --group claude-code --yes
+o lane setup uninstall --yes                  # removes only o-lane's entries
+o lane setup status --home /tmp/fixture-home  # any command against another home (tests)
 ```
 
 Install is idempotent, writes atomically, keeps the first original as `settings.json.o-lane.bak` (never overwritten) and needs owner confirmation (`--yes`); agents cannot confirm. `CLAUDE_CONFIG_DIR` picks another Claude Code directory, as it does for Claude Code; `--home` isolates HOME/XDG. Without a Claude Code directory the items read `n/a`. `setup.skip` lists item ids to skip.
@@ -167,7 +168,7 @@ Compared with Vim: lane states, pane association and elapsed time are domain ope
 
 ## MCP
 
-In the family, agents reach o-lane through mtm's single MCP gateway (`mtm mcp serve`, which runs `lane.*` once the extension is registered). The released generic MCP server is also available as `o-lane mcp serve` (the fully qualified spelling is `o-lane ochazuke mcp serve`). It provides catalog, describe, run and state over newline-delimited JSON-RPC. `o-lane mcp config` prints the harness entry, with the qualified spelling to avoid future app-name collisions. MCP always binds an agent identity, even if the launching shell identifies as owner; tool arguments cannot supply an actor. The stdio smoke test covers define/start/state/associate, dry-run, immutable request identity and declaration-named refusals for delete/reword. Import remains absent until L6, where it must declare never; export must declare confirm.
+In the family, agents reach o-lane through mtm's single MCP gateway (`mtm mcp serve`, which runs `lane.*` once the extension is registered). The released generic MCP server is also available as `o lane mcp serve` (the fully qualified spelling is `o lane ochazuke mcp serve`). It provides catalog, describe, run and state over newline-delimited JSON-RPC. `o lane mcp config` prints the harness entry, with the qualified spelling to avoid future app-name collisions. MCP always binds an agent identity, even if the launching shell identifies as owner; tool arguments cannot supply an actor. The stdio smoke test covers define/start/state/associate, dry-run, immutable request identity and declaration-named refusals for delete/reword. Import remains absent until L6, where it must declare never; export must declare confirm.
 
 A harness config entry has the following shape; use the generated `mcp config` output for the installed executable path. It uses normal XDG storage unless an explicit `--data` override is added to the arguments.
 
