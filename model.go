@@ -20,6 +20,9 @@ type State struct {
 	Starts bool   `json:"starts"`
 	Ends   bool   `json:"ends"`
 	Open   bool   `json:"open"`
+	// Description says in plain words what the state means. The Lanes page
+	// shows it under the focused lane; an empty description shows nothing.
+	Description string `json:"description,omitempty"`
 }
 type Link struct {
 	Kind   string `json:"kind"`
@@ -98,11 +101,18 @@ type View struct {
 	EffectiveProject   string `json:"effective_project"`
 	ProjectFrom        string `json:"project_from,omitempty"`
 	ProjectAssociation string `json:"project_association"`
+	// StateDescription is the description of the recorded state from
+	// lanes.states; StateReason is the note that came with the latest state
+	// change (see stateReason).
+	StateDescription string `json:"state_description,omitempty"`
+	StateReason      string `json:"state_reason,omitempty"`
 }
 
 func (s *Store) view(q Lane, rows []Lane) View {
 	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledState: q.State, Association: "unassociated", ProjectAssociation: "unassociated"}
 	v.EffectiveProject, v.ProjectFrom = effectiveProject(rows, q)
+	v.StateDescription = s.states()[q.State].Description
+	v.StateReason = stateReason(q.History)
 	switch {
 	case v.ProjectFrom == q.ID:
 		v.ProjectAssociation = "associated"
@@ -222,4 +232,46 @@ func activeHistory(history []Entry) []Entry {
 		}
 	}
 	return out
+}
+
+// stateReason is why the lane is in its state: the latest state change's own
+// note, else the latest note event recorded between the previous state change
+// and that one (agents often write the reason as a note, then change state).
+func stateReason(history []Entry) string {
+	h := activeHistory(history)
+	last := -1
+	for i := len(h) - 1; i >= 0; i-- {
+		if h[i].Kind == "state" || h[i].Kind == "create" {
+			last = i
+			break
+		}
+	}
+	if last < 0 {
+		return ""
+	}
+	if text := strings.TrimSpace(h[last].Text); text != "" {
+		return text
+	}
+	for i := last - 1; i >= 0; i-- {
+		if h[i].Kind == "state" || h[i].Kind == "create" {
+			break
+		}
+		if text := strings.TrimSpace(h[i].Text); h[i].Kind == "note" && text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+// stateAbout is the detail text for a lane's state: the state name, its
+// description and the reason. A state without a description shows nothing.
+func stateAbout(name, description, reason string) string {
+	if strings.TrimSpace(description) == "" {
+		return ""
+	}
+	text := "**" + name + "** — " + strings.TrimSpace(description)
+	if reason != "" {
+		text += "\n\nNote: " + reason
+	}
+	return text
 }

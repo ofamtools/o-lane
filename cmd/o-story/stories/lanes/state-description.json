@@ -1,0 +1,46 @@
+{
+  "name": "lanes/state-description",
+  "app": "o-lane",
+  "width": 140,
+  "height": 38,
+  "seed": {
+    "lanes": [
+      {
+        "name": "Fresh"
+      },
+      {
+        "name": "Paused"
+      }
+    ],
+    "states": [
+      {
+        "lane": "Paused",
+        "state": "parked",
+        "note": "waiting on owner"
+      }
+    ]
+  },
+  "script": [
+    "j",
+    "k"
+  ],
+  "expect": [
+    {
+      "after": 1,
+      "highlightedText": "Fresh",
+      "lacks": [
+        "Paused on purpose",
+        "Note:"
+      ]
+    },
+    {
+      "after": 2,
+      "highlightedText": "Paused",
+      "contains": [
+        "parked — Paused on purpose",
+        "Note: waiting on owner"
+      ]
+    }
+  ],
+  "theme": "dark"
+}

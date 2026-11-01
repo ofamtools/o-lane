@@ -61,6 +61,7 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 			Lane string
 			Pane Pane
 		}
+		States []struct{ Lane, State, Note string }
 	}
 	if e := json.Unmarshal(raw, &seed); e != nil {
 		t.Fatal(e)
@@ -70,6 +71,11 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 	}
 	if seed.Start != "" {
 		if _, e := a.store.Start(seed.Start, Pane{}, "", ""); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, st := range seed.States {
+		if _, e := a.store.State(st.Lane, st.State, st.Note); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -487,5 +493,75 @@ func TestPageStalePaneChoice(t *testing.T) {
 	pane := panes[0].(map[string]any)
 	if pane["session"] != "session/one" || pane["window"] != "window?two" || pane["role"] != "reviewer" || pane["harness"] != "codex" {
 		t.Fatal(panes)
+	}
+}
+
+func TestStateReason(t *testing.T) {
+	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	e := func(id, kind, to, text string) Entry { return Entry{ID: id, At: at, Kind: kind, To: to, Text: text} }
+	for _, c := range []struct {
+		name    string
+		history []Entry
+		want    string
+	}{
+		{"none", nil, ""},
+		{"own text", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "older"), e("3", "state", "parked", "waiting on owner")}, "waiting on owner"},
+		{"note before change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "first"), e("3", "note", "", "needs review"), e("4", "state", "review", "")}, "needs review"},
+		{"note before previous change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "old"), e("3", "state", "running", ""), e("4", "state", "review", "")}, ""},
+		{"note after change", []Entry{e("1", "create", "planned", ""), e("2", "state", "parked", ""), e("3", "note", "", "later")}, ""},
+		{"undone note", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "undone"), e("3", "state", "parked", ""), {ID: "4", Kind: "undo", Undo: &UndoRecord{Entries: []string{"2"}}}}, ""},
+	} {
+		if got := stateReason(c.history); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := stateAbout("planned", "", "why"); got != "" {
+		t.Fatalf("no description shows %q", got)
+	}
+	if got := stateAbout("parked", "Paused.", "waiting"); got != "**parked** — Paused.\n\nNote: waiting" {
+		t.Fatal(got)
+	}
+	if got := stateAbout("parked", "Paused.", ""); got != "**parked** — Paused." {
+		t.Fatal(got)
+	}
+}
+func TestPageStateDescriptions(t *testing.T) {
+	a := pageFixture(t)
+	seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Fresh"},{"name":"Paused"}],"states":[{"lane":"Paused","state":"parked","note":"waiting on owner"}]}`))
+	about := func() map[string]string {
+		rows, e := laneRows(a.store, a.pageOptions())
+		if e != nil {
+			t.Fatal(e)
+		}
+		out := map[string]string{}
+		for _, row := range rows {
+			text, _ := row.Data.(map[string]any)["state_about"].(string)
+			out[row.Label] = text
+		}
+		return out
+	}
+	got := about()
+	if got["Fresh"] != "" || !strings.Contains(got["Paused"], "**parked** — Paused on purpose") || !strings.HasSuffix(got["Paused"], "Note: waiting on owner") {
+		t.Fatal(got)
+	}
+	if lanePage(a.pageOptions()).Detail.Sections[0].Field != "state_about" {
+		t.Fatal("state description section is not first")
+	}
+	// A custom state table supplies its own descriptions; rows without one
+	// stay quiet, purely from data.
+	a.store.States = []State{{Name: "planned", Open: true, Description: "Not started."}, {Name: "parked", Open: true}}
+	if got = about(); got["Fresh"] != "**planned** — Not started." || got["Paused"] != "" {
+		t.Fatal(got)
+	}
+	if e := a.r.Settings().Set("lanes.state-descriptions", false); e != nil {
+		t.Fatal(e)
+	}
+	if got = about(); got["Fresh"] != "" {
+		t.Fatal("opt-out ignored", got)
+	}
+	for _, section := range lanePage(a.pageOptions()).Detail.Sections {
+		if section.Field == "state_about" {
+			t.Fatal("section opt-out ignored")
+		}
 	}
 }

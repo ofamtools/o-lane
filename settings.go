@@ -7,7 +7,13 @@ import (
 	"ofam.dev/ochazuke"
 )
 
-const defaultStates = `[{"name":"planned","tone":"dim","open":true},{"name":"running","tone":"state.working","starts":true,"open":true},{"name":"parked","tone":"dim","open":true},{"name":"review","tone":"accent","open":true},{"name":"merged","tone":"state.done","ends":true},{"name":"done","tone":"state.done","ends":true},{"name":"cancelled","tone":"dim","ends":true}]`
+const defaultStates = `[{"name":"planned","tone":"dim","open":true},` +
+	`{"name":"running","tone":"state.working","starts":true,"open":true,"description":"Someone is working on this now."},` +
+	`{"name":"parked","tone":"dim","open":true,"description":"Paused on purpose: nobody is working on it until someone picks it up again."},` +
+	`{"name":"review","tone":"accent","open":true,"description":"The work is finished and waits for review before it merges."},` +
+	`{"name":"merged","tone":"state.done","ends":true,"description":"The work is merged into main; it may still need a release or an install."},` +
+	`{"name":"done","tone":"state.done","ends":true,"description":"Finished: shipped, delivered or answered."},` +
+	`{"name":"cancelled","tone":"dim","ends":true,"description":"Stopped without finishing; kept for the record."}]`
 
 const defaultLiveStates = `{"working":{"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
 
@@ -28,7 +34,7 @@ func appSettings() []ochazuke.Setting {
 			}
 			_, e := parseStates(text)
 			return e
-		}, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open"},
+		}, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open, description (shown under the focused lane; empty shows nothing)"},
 		{Name: "lanes.pane-roles", Type: ochazuke.SettingList, Default: []string{"implementer", "reviewer", "watcher", "coordinator"}, Description: "Pane roles"},
 		{Name: "lanes.tag-states", Type: ochazuke.SettingString, Default: `{"LANE-DONE":"review"}`, Description: "JSON tag to lifecycle state map; unmapped tags append notes"},
 		{Name: "lanes.plans-dir", Type: ochazuke.SettingString, Default: "", Description: "Optional plan directory; unset by default"},
@@ -59,6 +65,7 @@ func appSettings() []ochazuke.Setting {
 		{"lanes.tree", true, "Show lane nesting; changes apply on the next page mount"}, {"lanes.state-tones", true, "Colour lifecycle states"}, {"lanes.detail", true, "Show lane detail sections; changes apply on the next page mount"},
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.agent-live", true, "Read live state of associated agents from lanes.agent-harnesses data"}, {"lanes.live-tones", true, "Colour live state"},
 		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"}, {"lanes.name-tone", true, "Draw the lane name in the same tone as its state cell"},
+		{"lanes.state-descriptions", true, "Show the focused lane's state description and reason in the detail; changes apply on the next page mount"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})
 	}

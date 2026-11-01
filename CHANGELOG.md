@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Lanes page: the detail opens with the focused lane's state, a plain description of what it means and the reason (the state change's note, else the last note before it). Descriptions are an optional `description` field on `lanes.states` rows; defaults describe every state except planned. `lane show`/`lane rows` add `state_description` and `state_reason`. Pane detail labels live status `agent <state>` and the `live state` field reads `agent status`. `lanes.state-descriptions` (default true) turns the section off.
 - Accept tuios session/window lists as either JSON arrays or named objects for pane choices and live snapshots; preserve explicit session/window targets when focusing a lane's pane with `g p`.
 
 - Associate lanes with harness sub-agents: `lane associate/unassociate --agent-id ID [--harness H] [--agent-session S]` and the agent-side `agent associate/unassociate/lanes` share the association handler; `agent live` and `agent list` read agent state. Agent participants are keyed by harness and id.
