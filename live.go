@@ -95,9 +95,13 @@ func (a *App) liveOptions() (liveOptions, error) {
 // are shared, a pane counts only for the lane holding its most recent
 // association, so data recorded before the one-lane rule reads correctly.
 func (s *Store) panesInSubtree(rows []Lane, q Lane) []Pane {
+	return s.panesInSubtreeWhere(rows, q, nil)
+}
+
+func (s *Store) panesInSubtreeWhere(rows []Lane, q Lane, include func(Lane) bool) []Pane {
 	panes := []Pane{}
 	for _, row := range rows {
-		if row.ID == q.ID || descendant(rows, row.ID, q.ID) {
+		if !row.Deleted && (row.ID == q.ID || descendant(rows, row.ID, q.ID)) && (include == nil || include(row)) {
 			panes = append(panes, s.ownPanes(rows, row)...)
 		}
 	}
@@ -147,6 +151,41 @@ type liveSnapshot struct {
 type liveSnapshots map[liveScope]liveSnapshot
 
 func scopeOf(p Pane) liveScope { return liveScope{p.Host, p.Session} }
+
+// windowID keeps exact IDs authoritative and resolves only unique prefixes
+// within this host/session snapshot. Ambiguous and missing refs stay unresolved.
+func (s liveSnapshot) windowID(ref string) (string, bool) {
+	if ref == "" {
+		return "", false
+	}
+	if _, ok := s.windows[ref]; ok {
+		return ref, true
+	}
+	match := ""
+	for id := range s.windows {
+		if strings.HasPrefix(id, ref) {
+			if match != "" {
+				return "", false
+			}
+			match = id
+		}
+	}
+	return match, match != ""
+}
+
+// Association is still record-first when tuios is unavailable or a ref cannot
+// be resolved. The same bounded snapshot lookup serves live reads and writes.
+func (a *App) resolvePane(p Pane) Pane {
+	if p.Window == "" || p.Session == "" {
+		return p
+	}
+	snap := snapshotScopes(context.Background(), []Pane{p}, a.run)[scopeOf(p)]
+	if id, ok := snap.windowID(p.Window); snap.err == nil && ok {
+		p.Window = id
+	}
+	return p
+}
+
 func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liveSnapshots {
 	out := liveSnapshots{}
 	for _, p := range panes {
@@ -211,7 +250,8 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 					item.Error = snap.err.Error()
 				}
 			} else {
-				raw, exists := snap.windows[p.Window]
+				id, exists := snap.windowID(p.Window)
+				raw := snap.windows[id]
 				if !exists {
 					raw = "closed"
 				}
@@ -224,7 +264,7 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 				}
 				item.State, item.Tone, item.Glyph = st.Name, st.Tone, st.Glyph
 				item.known, item.working = ok, st.Working
-				if at, ok := snap.stateTimes[p.Window]; ok {
+				if at, ok := snap.stateTimes[id]; ok {
 					item.StateSince = &at
 				}
 			}
@@ -363,8 +403,8 @@ func (a *App) enrichLive(views []View) error {
 	for i := range views {
 		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
 		views[i].Live = &v
-		own := aggregateLive(a.store.ownPanes(rows, views[i].Lane), o, snapshots)
-		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.states(), own, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
+		activity := aggregateLive(a.store.stalePanes(rows, views[i].Lane), o, snapshots)
+		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.states(), activity, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
 	}
 	return nil
 }

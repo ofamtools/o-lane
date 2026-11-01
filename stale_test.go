@@ -88,7 +88,7 @@ func TestStaleRowsCLIAndFilters(t *testing.T) {
 		t.Fatal(e)
 	}
 	views := f.call("lane", "list", "--stale").([]any)
-	if len(views) != 2 {
+	if len(views) != 1 {
 		t.Fatal(views)
 	}
 	if got := f.lane("show", "Idle"); got["stale"] != true || !strings.Contains(got["stale_reason"].(string), "since 2026-01-01T13:00:00Z") {
@@ -201,5 +201,69 @@ func TestStaleReaderTimestampInvalidation(t *testing.T) {
 	r.apply(liveEvent{Type: "agent-state", Session: "s", Window: "w", State: "done"})
 	if !r.current([]Pane{p})[scopeOf(p)].stateTimes["w"].IsZero() {
 		t.Fatal("previous state's time survived transition")
+	}
+}
+
+func TestStaleWorkingDescendants(t *testing.T) {
+	for _, tc := range []struct {
+		name, descendantState, raw string
+		want                       bool
+	}{
+		{"working grandchild", "running", "working", false},
+		{"waiting grandchild", "running", "needs_input", false},
+		{"idle grandchild", "running", "idle", true},
+		{"review grandchild", "review", "working", true},
+		{"parked grandchild", "parked", "working", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newCLI(t)
+			f.lane("add", "Root")
+			f.lane("add", "Parent", "--parent", "Root")
+			f.lane("add", "Middle", "--parent", "Parent")
+			f.lane("add", "Worker", "--parent", "Middle")
+			f.lane("start", "Root")
+			f.lane("start", "Parent")
+			f.lane("state", "Worker", tc.descendantState)
+			f.lane("associate", "Worker", "--pane", "w1", "--session", "s", "--role", "reviewer")
+			if e := f.a.r.Settings().Set("lanes.live-roles", []string{"implementer"}); e != nil {
+				t.Fatal(e)
+			}
+			f.a.run = func(context.Context, []string) ([]byte, error) {
+				return []byte(`[{"window_id":"w1","agent_state":"` + tc.raw + `"}]`), nil
+			}
+			for _, name := range []string{"Root", "Parent"} {
+				if got := f.lane("show", name); got["stale"] != tc.want {
+					t.Fatalf("%s stale=%v want %v", name, got["stale"], tc.want)
+				}
+			}
+			rows, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, row := range rows {
+				data := row.Data.(map[string]any)
+				if name := data["name"]; name == "Root" || name == "Parent" {
+					if data["stale"] != tc.want {
+						t.Fatalf("page %v stale=%v want %v", name, data["stale"], tc.want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestStaleWaitingActivityMapping(t *testing.T) {
+	// tuios uses needs_input for approval, question and auth waits. Test both
+	// legacy label overrides and object rows against the same activity defaults.
+	for _, setting := range []string{defaultLiveStates, `{"needs_input":"waiting"}`, `{"needs_input":{"name":"awaiting person"}}`} {
+		f := newCLI(t)
+		if e := f.a.r.Settings().Set("lanes.live-states", setting); e != nil {
+			t.Fatal(e)
+		}
+		f.lane("add", "Waiting")
+		f.lane("start", "Waiting", "--pane", "w2", "--session", "s")
+		if got := f.lane("show", "Waiting"); got["stale"] != false {
+			t.Fatal(got)
+		}
 	}
 }

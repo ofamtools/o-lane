@@ -1,0 +1,15 @@
+{
+  "name": "lanes/stale-needs-input",
+  "app": "o-lane",
+  "width": 160,
+  "height": 46,
+  "seed": {
+    "lanes": [{"name":"Approval"}],
+    "start": "Approval",
+    "associations": [{"lane":"Approval","pane":{"session":"fixture-session","window":"waiting-window","role":"implementer"}}],
+    "live_windows": [{"window_id":"waiting-window","agent_state":"needs_input"}]
+  },
+  "script": ["j"],
+  "theme": "dark",
+  "expect": [{"after":1,"contains":["Approval","running · needs input"],"lacks":["stale","No agent is working"]}]
+}

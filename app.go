@@ -509,6 +509,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		if p.Role != "" && !slices.Contains(a.r.Settings().Strings("lanes.pane-roles"), p.Role) {
 			return done(nil, fmt.Errorf("unknown role %q; configure lanes.pane-roles", p.Role))
 		}
+		p = a.resolvePane(p)
 		q, e := s.Start(target, p, str("branch"), str("worktree"))
 		return done(q, e)
 	case "associate", "unassociate":
@@ -522,6 +523,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		if project != "" && p.Window == "" && p.Host == "" && p.Harness == "" && p.Model == "" && p.Agent == "" && p.AgentID == "" {
 			q, e := s.AssociateProject(target, project, remove)
 			return done(q, e)
+		}
+		if !remove {
+			p = a.resolvePane(p)
 		}
 		if project != "" {
 			// Both relations in one call share one snapshot and one undo.

@@ -6,9 +6,16 @@ import (
 	"time"
 )
 
-// Staleness is a read-time projection of a lane's own participants, independent
-// of subtree rollup, role filters and presentation labels. Unknown evidence
+// Staleness considers current participants on the lane and working descendants,
+// independent of role filters and presentation labels. Unknown evidence
 // cannot prove that nobody is working. It never changes state or history.
+func (s *Store) stalePanes(rows []Lane, q Lane) []Pane {
+	states := s.states()
+	return s.panesInSubtreeWhere(rows, q, func(row Lane) bool {
+		return states[row.State].Starts
+	})
+}
+
 func staleLane(q Lane, states map[string]State, live Live, enabled bool, now time.Time) (bool, string) {
 	if !enabled || q.Deleted || !states[q.State].Starts || live.State == "off" {
 		return false, ""

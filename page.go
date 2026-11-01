@@ -106,7 +106,7 @@ type pageOptions struct {
 	live                                                               liveOptions
 	liveTones                                                          bool
 	liveRows                                                           map[string]Live
-	ownLiveRows                                                        map[string]Live
+	staleLiveRows                                                      map[string]Live
 	staleFlag                                                          bool
 	groupProjects, projectColumn, nameTone, stateAbout                 bool
 	project                                                            string
@@ -190,10 +190,10 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 			snapshots = snapshotScopes(ctx, panes, run)
 		}
 		o.liveRows = map[string]Live{}
-		o.ownLiveRows = map[string]Live{}
+		o.staleLiveRows = map[string]Live{}
 		for _, q := range rows {
 			o.liveRows[q.ID] = aggregateLive(s.panesInSubtree(rows, q), o.live, snapshots)
-			o.ownLiveRows[q.ID] = aggregateLive(s.ownPanes(rows, q), o.live, snapshots)
+			o.staleLiveRows[q.ID] = aggregateLive(s.stalePanes(rows, q), o.live, snapshots)
 		}
 	}
 	return projectLaneRows(s, o, rows)
@@ -276,8 +276,8 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				}
 			}
 			stale, staleReason := false, ""
-			if own, ok := o.ownLiveRows[q.ID]; ok && o.live.on {
-				stale, staleReason = staleLane(q, s.states(), own, o.staleFlag, o.now)
+			if activity, ok := o.staleLiveRows[q.ID]; ok && o.live.on {
+				stale, staleReason = staleLane(q, s.states(), activity, o.staleFlag, o.now)
 			}
 			staleStart := len([]rune(cells[1])) + 3
 			if stale {

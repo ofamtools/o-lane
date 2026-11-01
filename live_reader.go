@@ -142,7 +142,8 @@ func (r *liveReader) apply(event liveEvent) bool {
 	}
 	relevant := false
 	for _, p := range r.panes {
-		if scopeOf(p) == key && p.Window == event.Window {
+		id, resolved := snap.windowID(p.Window)
+		if scopeOf(p) == key && (p.Window == event.Window || (resolved && id == event.Window)) {
 			relevant = true
 			break
 		}

@@ -1,0 +1,15 @@
+{
+  "name": "lanes/stale-working-descendant",
+  "app": "o-lane",
+  "width": 160,
+  "height": 46,
+  "seed": {
+    "lanes": [{"name":"Parent"}, {"name":"Child","parent":"Parent"}, {"name":"Worker","parent":"Child"}],
+    "states": [{"lane":"Parent","state":"running"}, {"lane":"Child","state":"running"}, {"lane":"Worker","state":"running"}],
+    "associations": [{"lane":"Worker","pane":{"session":"fixture-session","window":"working-window","role":"implementer"}}],
+    "live_windows": [{"window_id":"working-window","agent_state":"working"}]
+  },
+  "script": ["j", "k"],
+  "theme": "dark",
+  "expect": [{"after":2,"contains":["Parent","Child","Worker","running · working"],"lacks":["stale","No agent is working"]}]
+}

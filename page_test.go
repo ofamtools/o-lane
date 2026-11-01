@@ -61,10 +61,20 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 			Lane string
 			Pane Pane
 		}
-		States []struct{ Lane, State, Note string }
+		States      []struct{ Lane, State, Note string }
+		LiveWindows []windowState `json:"live_windows"`
 	}
 	if e := json.Unmarshal(raw, &seed); e != nil {
 		t.Fatal(e)
+	}
+	if seed.LiveWindows != nil {
+		run := a.run
+		a.run = func(ctx context.Context, argv []string) ([]byte, error) {
+			if reflect.DeepEqual(argv, []string{"tuios", "list-windows", "--json", "-s", "fixture-session"}) {
+				return json.Marshal(seed.LiveWindows)
+			}
+			return run(ctx, argv)
+		}
 	}
 	if _, e := a.store.Define(seed.Lanes); e != nil {
 		t.Fatal(e)

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Avoid false stale flags on working lanes when any working descendant has an active participant, including tuios `needs_input` approval/question/auth waits. Reuse the single `lanes.live-states` activity mapping, independent of role filters. Resolve unique pane ID prefixes to full IDs when associating (including `start` and the pane-side verb), retaining the supplied ID on failed or ambiguous lookup; live snapshots and subscription updates also match existing stored prefixes within their host/session.
+
 - Clean temporary paths before the CLI fixture containment check, including when `TMPDIR` ends in a slash.
 
 - Detect omp actors from `PI_SESSION_ID`/`PI_SESSION_FILE` through a shared harness-detector table (also Codex and Claude Code); preserve tuios pane/session and common model fields, distinguish omp runs in history/undo, and scope run IDs to an explicit harness. Test fixtures clear inherited PI/OMP identity.
