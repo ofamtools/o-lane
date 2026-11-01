@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clean temporary paths before the CLI fixture containment check, including when `TMPDIR` ends in a slash.
+
 - Detect omp actors from `PI_SESSION_ID`/`PI_SESSION_FILE` through a shared harness-detector table (also Codex and Claude Code); preserve tuios pane/session and common model fields, distinguish omp runs in history/undo, and scope run IDs to an explicit harness. Test fixtures clear inherited PI/OMP identity.
 
 - Flag lanes whose recorded `lanes.states` row has `starts:true` and whose own current participants are all inactive or gone: State-cell warning, detail explanation, read-only `stale` bool, default `stale` saved filter and `lane list --stale`. `lanes.stale-flag` defaults to true; disabling it or live reads disables the projection. Live-state activity comes from row data, independent of labels and aggregate roles; failed/unknown reads never prove staleness. Report known state-change times or explicitly labelled observations.

@@ -204,7 +204,7 @@ func TestCLIFixtureClearsIdentity(t *testing.T) {
 		t.Setenv(k, "inherited")
 	}
 	dir := fixture(t)
-	if !strings.HasPrefix(dir, os.TempDir()+string(os.PathSeparator)) {
+	if !strings.HasPrefix(filepath.Clean(dir), filepath.Clean(os.TempDir())+string(os.PathSeparator)) {
 		t.Fatal(dir)
 	}
 	for _, k := range []string{"TUIOS_SESSION", "TUIOS_PANE_ID", "TUIOS_HARNESS", "TUIOS_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
