@@ -107,3 +107,32 @@ func TestPanePrefixLive(t *testing.T) {
 		})
 	}
 }
+
+func TestPanePrefixReaderUniquenessChanges(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		windows map[string]string
+		event   liveEvent
+	}{
+		{"ambiguous becomes unique", map[string]string{"prefix-a": "working", "prefix-b": "idle"}, liveEvent{Type: "window-closed", Session: "s", Window: "prefix-b"}},
+		{"closed becomes active", map[string]string{}, liveEvent{Type: "agent-state", Session: "s", Window: "prefix-a", State: "working"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Pane{Window: "prefix-", Session: "s"}
+			r := newLiveReader(nil, []Pane{p}, liveSnapshots{{Session: "s"}: {windows: tc.windows}})
+			r.apply(tc.event)
+			select {
+			case <-r.changed:
+			default:
+				t.Fatal("changed prefix resolution did not notify the page")
+			}
+			mapping, err := parseLiveStates(defaultLiveStates)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if live := aggregateLive([]Pane{p}, liveOptions{on: true, mapping: mapping}, r.current([]Pane{p})); live.State != "working" {
+				t.Fatal(live)
+			}
+		})
+	}
+}

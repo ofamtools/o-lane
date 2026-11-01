@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -142,8 +143,9 @@ func (r *liveReader) apply(event liveEvent) bool {
 	}
 	relevant := false
 	for _, p := range r.panes {
-		id, resolved := snap.windowID(p.Window)
-		if scopeOf(p) == key && (p.Window == event.Window || (resolved && id == event.Window)) {
+		// Any candidate can change a prefix's uniqueness, including a close
+		// that leaves one surviving window. aggregateLive resolves the winner.
+		if scopeOf(p) == key && p.Window != "" && strings.HasPrefix(event.Window, p.Window) {
 			relevant = true
 			break
 		}
