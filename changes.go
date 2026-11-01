@@ -351,7 +351,57 @@ func paneMatches(stored, query Pane) bool {
 	}
 	return paneKey(stored, query)
 }
-func (s *Store) associate(q *Lane, p Pane, remove bool) {
+
+// LaneRef names a lane in a result.
+type LaneRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Associated is an association answer: the lane, plus the lanes the pane was
+// moved away from (a pane belongs to one lane unless lanes.pane-one-lane is
+// off).
+type Associated struct {
+	Lane
+	MovedFrom []LaneRef `json:"moved_from,omitempty"`
+}
+
+// identified reports whether a pane names a window or an agent, so it can be
+// said to be the same participant on another lane.
+func identified(p Pane) bool { return p.Window != "" || p.AgentID != "" }
+
+// movePane removes p from every other lane that lists it and records on each
+// a history event naming the lane it moved to. rows is the whole store, so
+// the move shares the association's snapshot and undo.
+func (s *Store) movePane(q *Lane, rows *[]Lane, p Pane) []LaneRef {
+	if s.PanesShared || rows == nil || !identified(p) {
+		return nil
+	}
+	moved := []LaneRef{}
+	for i := range *rows {
+		r := &(*rows)[i]
+		if r.ID == q.ID || r.Deleted {
+			continue
+		}
+		for _, old := range slices.Clone(r.Panes) {
+			if !paneKey(old, p) {
+				continue
+			}
+			r.Panes = slices.DeleteFunc(r.Panes, func(x Pane) bool { return paneKey(x, p) })
+			gone := old
+			s.entry(r, "unassociate", "", "", "pane moved to lane "+q.Name, nil, &gone)
+			r.History[len(r.History)-1].MovedTo = q.ID
+			moved = append(moved, LaneRef{ID: r.ID, Name: r.Name})
+			break
+		}
+	}
+	return moved
+}
+func (s *Store) associate(q *Lane, rows *[]Lane, p Pane, remove bool) []LaneRef {
+	var moved []LaneRef
+	if !remove {
+		moved = s.movePane(q, rows, p)
+	}
 	kind := "associate"
 	if p.Role == "" {
 		p.Role = "implementer"
@@ -377,13 +427,23 @@ func (s *Store) associate(q *Lane, p Pane, remove bool) {
 		}
 	}
 	s.entry(q, kind, "", "", "", nil, &p)
+	return moved
 }
 func (s *Store) Associate(target string, p Pane, remove bool) (Lane, error) {
+	out, e := s.AssociateMoving(target, p, remove)
+	return out.Lane, e
+}
+
+// AssociateMoving associates (or removes) a pane and reports the lanes it
+// moved away from.
+func (s *Store) AssociateMoving(target string, p Pane, remove bool) (Associated, error) {
 	action := "associate"
 	if remove {
 		action = "unassociate"
 	}
-	return s.mutate(action, target, func(q *Lane, _ *[]Lane) error { s.associate(q, p, remove); return nil })
+	var moved []LaneRef
+	q, e := s.mutate(action, target, func(q *Lane, rows *[]Lane) error { moved = s.associate(q, rows, p, remove); return nil })
+	return Associated{Lane: q, MovedFrom: moved}, e
 }
 func (s *Store) preset(q *Lane, verb, note string) error {
 	table := s.StatePresets
@@ -403,7 +463,7 @@ func (s *Store) Preset(target, verb, note string) (Lane, error) {
 	return s.mutate("state", target, func(q *Lane, _ *[]Lane) error { return s.preset(q, verb, note) })
 }
 func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, error) {
-	return s.mutate("start", target, func(q *Lane, _ *[]Lane) error {
+	return s.mutate("start", target, func(q *Lane, rows *[]Lane) error {
 		if e := s.preset(q, "start", ""); e != nil {
 			return e
 		}
@@ -415,7 +475,7 @@ func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, err
 		}
 		// Capture pane-less subagents as an unassociated participation record.
 		if p.Window != "" || p.Harness != "" || p.Agent != "" || p.Model != "" || p.AgentID != "" {
-			s.associate(q, p, false)
+			s.associate(q, rows, p, false)
 		}
 		return nil
 	})

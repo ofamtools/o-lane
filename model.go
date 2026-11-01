@@ -60,6 +60,9 @@ type Entry struct {
 	Text  string      `json:"text,omitempty"`
 	Links []Link      `json:"links,omitempty"`
 	Pane  *Pane       `json:"pane,omitempty"`
+	// MovedTo names the lane a pane moved to when associating it there
+	// removed it from this lane (lanes.pane-one-lane).
+	MovedTo string `json:"moved_to,omitempty"`
 }
 type Spec struct {
 	Name     string   `json:"name"`

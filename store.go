@@ -26,8 +26,11 @@ type Store struct {
 	Warn         func(string)
 	BackupDaily  bool
 	BackupKeep   int
-	Permit       func(string) error
-	Remove       func(string) error
+	// PanesShared lets one pane belong to several lanes at once
+	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
+	PanesShared bool
+	Permit      func(string) error
+	Remove      func(string) error
 }
 type UndoChange struct {
 	ID      string   `json:"id"`

@@ -82,18 +82,46 @@ func (a *App) liveOptions() (liveOptions, error) {
 	}
 	return o, err
 }
-func panesInSubtree(rows []Lane, q Lane) []Pane {
+
+// panesInSubtree lists the panes that count for q's subtree. Unless panes
+// are shared, a pane counts only for the lane holding its most recent
+// association, so data recorded before the one-lane rule reads correctly.
+func (s *Store) panesInSubtree(rows []Lane, q Lane) []Pane {
 	panes := []Pane{}
 	for _, row := range rows {
 		if row.ID == q.ID || descendant(rows, row.ID, q.ID) {
-			panes = append(panes, row.Panes...)
+			for _, p := range row.Panes {
+				if s.PanesShared || paneHolder(rows, row.ID, p) == "" {
+					panes = append(panes, p)
+				}
+			}
 		}
 	}
 	return panes
 }
+
+// paneHolder returns the lane that associated p after laneID did, or "" when
+// laneID holds p's most recent association (ties keep every holder).
+func paneHolder(rows []Lane, laneID string, p Pane) string {
+	if !identified(p) {
+		return ""
+	}
+	holder, since := "", p.Since
+	for _, r := range rows {
+		if r.ID == laneID || r.Deleted {
+			continue
+		}
+		for _, o := range r.Panes {
+			if paneKey(o, p) && o.Since.After(since) {
+				holder, since = r.ID, o.Since
+			}
+		}
+	}
+	return holder
+}
 func (a *App) associatedPanes(q Lane) ([]Pane, error) {
 	rows, err := a.store.List()
-	return panesInSubtree(rows, q), err
+	return a.store.panesInSubtree(rows, q), err
 }
 
 type liveScope struct{ Host, Session string }
@@ -306,11 +334,11 @@ func (a *App) enrichLive(views []View) error {
 	}
 	panes := []Pane{}
 	for _, v := range views {
-		panes = append(panes, panesInSubtree(rows, v.Lane)...)
+		panes = append(panes, a.store.panesInSubtree(rows, v.Lane)...)
 	}
 	snapshots := snapshotScopes(context.Background(), panes, a.run)
 	for i := range views {
-		v := aggregateLive(panesInSubtree(rows, views[i].Lane), o, snapshots)
+		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
 		views[i].Live = &v
 	}
 	return nil

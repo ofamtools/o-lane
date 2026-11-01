@@ -70,6 +70,8 @@ Every lane belongs to a project. A project is a reference only, an id or name wi
 
 Lifecycle states are JSON rows in `lanes.states`, with `name`, `tone`, `starts`, `ends`, `open` and an optional `description`. The default names are planned, running, parked, review, merged, done and cancelled; there is no transition table. `lanes.state-presets` maps start/park/review/merge/finish/cancel/reopen to state names; configure it alongside a custom state table. A missing preset or a target absent from `lanes.states` refuses with a reason naming `lanes.state-presets`. Started and finished are derived from effective history, including after undo. A move to any non-ending state clears finished. Root views expose both the recorded state and `rolled_state`: mixed descendants use the first configured open state present, otherwise the first configured closed state present.
 
+A pane belongs to one lane at a time. Associating a pane (or agent) with a lane removes it from every other lane that lists it, in the same change and undo; each of those lanes records an `unassociate` history event with `moved_to` naming the new lane, and the `associate` answer lists them in `moved_from`. Older data that lists a pane on several lanes needs no migration: only the lane with the pane's latest association (`since`) counts it for live status, focus and the Panes and Agents columns, and the others show it in their pane detail as `moved to lane NAME`. `lanes.pane-one-lane=false` lets lanes share panes again.
+
 Pane refs include host, session, window, role and optional harness/model/agent. Unknown window IDs are accepted. Empty window refs are unassociated; pane-less subagents retain their participation metadata. A recorded window absent from a successful snapshot reads closed. The CLI `live` verb returns every associated pane and the aggregate over the lane’s whole subtree. CLI `show`, `list`, `tree` and portable `rows` answers also include derived live state, sharing one snapshot per explicit host/session per call through the injectable runner, without a subscription. Live reads never write records or history. `lanes.live=false` disables reads. Focus uses `lanes.pane-open` as an argv template, without shell evaluation. Headless agents cannot focus panes; the standalone page supplies live interaction. Focus runs through the injectable runner off the UI loop and still works when live reads are disabled. Yank verbs write the framework register and return the text.
 
 ## Agents (subagents inside one pane)
@@ -131,6 +133,7 @@ Page settings and defaults:
 | `lanes.durations` | true | Hide the elapsed/duration column |
 | `lanes.pane-column` | true | Hide the pane-role column |
 | `lanes.history-in-detail` | true | Hide the history section and history projection |
+| `lanes.pane-one-lane` | true | Lanes may share a pane: associating keeps it on its other lanes and every lane listing it shows its live status |
 | `lanes.state-descriptions` | true | Hide the state description and reason at the top of the detail; next page mount |
 | `lanes.detail` | true | Hide detail and Enter viewer; next page mount |
 | `lanes.hide-closed-roots` | false | Show closed roots and their children |

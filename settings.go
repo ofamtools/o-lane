@@ -65,6 +65,7 @@ func appSettings() []ochazuke.Setting {
 		{"lanes.tree", true, "Show lane nesting; changes apply on the next page mount"}, {"lanes.state-tones", true, "Colour lifecycle states"}, {"lanes.detail", true, "Show lane detail sections; changes apply on the next page mount"},
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.agent-live", true, "Read live state of associated agents from lanes.agent-harnesses data"}, {"lanes.live-tones", true, "Colour live state"},
 		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"}, {"lanes.name-tone", true, "Draw the lane name in the same tone as its state cell"},
+		{"lanes.pane-one-lane", true, "A pane belongs to one lane: associating it with a lane removes it from the others, and only its latest lane shows its live status; false lets lanes share panes"},
 		{"lanes.state-descriptions", true, "Show the focused lane's state description and reason in the detail; changes apply on the next page mount"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})

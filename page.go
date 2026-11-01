@@ -185,7 +185,7 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 		}
 		o.liveRows = map[string]Live{}
 		for _, q := range rows {
-			o.liveRows[q.ID] = aggregateLive(panesInSubtree(rows, q), o.live, snapshots)
+			o.liveRows[q.ID] = aggregateLive(s.panesInSubtree(rows, q), o.live, snapshots)
 		}
 	}
 	return projectLaneRows(s, o, rows)
@@ -281,6 +281,22 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			paneLabels, agents, paneDetail := []string{}, []string{}, []string{}
 			roles := map[string]int{}
 			for _, p := range q.Panes {
+				if holder := paneHolder(lanes, q.ID, p); !s.PanesShared && holder != "" {
+					// Another lane associated this pane later: it is history
+					// here, so it shows no role, agent or live status.
+					name := holder
+					for _, r := range lanes {
+						if r.ID == holder {
+							name = r.Name
+						}
+					}
+					ref := p.Window
+					if ref == "" {
+						ref = "agent " + p.AgentID
+					}
+					paneDetail = append(paneDetail, fmt.Sprintf("- %s: %s · moved to lane %s", p.Role, ref, name))
+					continue
+				}
 				if p.Window != "" {
 					roles[p.Role]++
 				}

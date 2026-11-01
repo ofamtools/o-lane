@@ -142,6 +142,7 @@ func (a *App) configure() error {
 	a.store.StatePresets = presets
 	a.store.BackupDaily = cfg.Bool("backup.daily")
 	a.store.BackupKeep = cfg.Int("backup.keep")
+	a.store.PanesShared = !cfg.Bool("lanes.pane-one-lane")
 	return nil
 }
 func (a *App) specs() []verbSpec {
@@ -521,16 +522,17 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		}
 		if project != "" {
 			// Both relations in one call share one snapshot and one undo.
-			q, e := s.mutate(verb, target, func(q *Lane, _ *[]Lane) error {
+			var moved []LaneRef
+			q, e := s.mutate(verb, target, func(q *Lane, rows *[]Lane) error {
 				if e := s.project(q, project, remove); e != nil {
 					return e
 				}
-				s.associate(q, p, remove)
+				moved = s.associate(q, rows, p, remove)
 				return nil
 			})
-			return done(q, e)
+			return done(Associated{Lane: q, MovedFrom: moved}, e)
 		}
-		q, e := s.Associate(target, p, remove)
+		q, e := s.AssociateMoving(target, p, remove)
 		return done(q, e)
 	case "link", "unlink":
 		link := Link{Kind: str("kind"), Target: str("link"), Label: str("label")}
