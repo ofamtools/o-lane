@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="o-lane">
+<title>o-lane</title>
+<rect width="128" height="128" rx="28" fill="#231d08"></rect>
+<g transform="translate(20 20)"><rect x="2" y="34" width="84" height="20" rx="10" fill="#5c5136"></rect><circle cx="16" cy="44" r="5" fill="#9a8650"></circle><circle cx="44" cy="44" r="7" fill="#f8dc85"></circle><circle cx="72" cy="44" r="13" fill="#f2c230"></circle><path d="M66 44l4 4 8-9" fill="none" stroke="#231d08" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></g>
+</svg>
