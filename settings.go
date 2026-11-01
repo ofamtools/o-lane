@@ -15,7 +15,7 @@ const defaultStates = `[{"name":"planned","tone":"dim","open":true},` +
 	`{"name":"done","tone":"state.done","ends":true,"description":"Finished: shipped, delivered or answered."},` +
 	`{"name":"cancelled","tone":"dim","ends":true,"description":"Stopped without finishing; kept for the record."}]`
 
-const defaultLiveStates = `{"working":{"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
+const defaultLiveStates = `{"working":{"working":true,"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"working":true,"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
 
 const defaultStatePresets = `{"start":"running","park":"parked","review":"review","merge":"merged","finish":"done","cancel":"cancelled","reopen":"planned"}`
 
@@ -41,7 +41,7 @@ func appSettings() []ochazuke.Setting {
 		{Name: "lanes.export.path", Type: ochazuke.SettingString, Default: "", Description: "Optional export destination; unset disables export"},
 		{Name: "lanes.export.columns", Type: ochazuke.SettingList, Default: []string{"wording", "estimate", "started", "finished", "result"}, Description: "Export columns"},
 		{Name: "lanes.pane-open", Type: ochazuke.SettingList, Default: []string{"tuios", "focus-window", "-s", "{session}", "{window}"}, Description: "Pane focus argv template"},
-		{Name: "lanes.live-states", Type: ochazuke.SettingString, Default: defaultLiveStates, Validate: func(v any) error { _, e := parseLiveStates(fmt.Sprint(v)); return e }, Description: "JSON pane state to {name, tone, glyph} map; legacy string labels accepted"},
+		{Name: "lanes.live-states", Type: ochazuke.SettingString, Default: defaultLiveStates, Validate: func(v any) error { _, e := parseLiveStates(fmt.Sprint(v)); return e }, Description: "JSON pane state to {name, tone, glyph} map, with working:true for active states; legacy string labels accepted"},
 		{Name: "lanes.live-precedence", Type: ochazuke.SettingList, Default: []string{"needs input", "errored", "working", "done", "idle", "closed", "missing"}, Description: "Live state aggregation priority"},
 		{Name: "lanes.live-roles", Type: ochazuke.SettingList, Default: []string{}, Description: "Roles counted in the aggregate; empty includes all; pane details always include every role"},
 		{Name: "lanes.project-source", Type: ochazuke.SettingString, Default: projectSourceDefault(), Validate: func(v any) error {
@@ -66,6 +66,7 @@ func appSettings() []ochazuke.Setting {
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane state"}, {"lanes.agent-live", true, "Read live state of associated agents from lanes.agent-harnesses data"}, {"lanes.live-tones", true, "Colour live state"},
 		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"}, {"lanes.name-tone", true, "Draw the lane name in the same tone as its state cell"},
 		{"lanes.pane-one-lane", true, "A pane belongs to one lane: associating it with a lane removes it from the others, and only its latest lane shows its live status; false lets lanes share panes"},
+		{"lanes.stale-flag", true, "Flag working lifecycle states with no working participant; requires live reads"},
 		{"lanes.state-descriptions", true, "Show the focused lane's state description and reason in the detail; changes apply on the next page mount"},
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})

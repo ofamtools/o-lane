@@ -1,0 +1,14 @@
+{
+  "name": "lanes/stale-off",
+  "app": "o-lane",
+  "width": 160,
+  "height": 46,
+  "seed": {
+    "lanes": [{"name": "Implementation"}],
+    "start": "Implementation",
+    "associations": [{"lane": "Implementation", "pane": {"session": "fixture-session", "window": "fixture-window", "role": "implementer"}}]
+  },
+  "values": {"lanes.stale-flag": false},
+  "script": [],
+  "expect": [{"after": 0, "contains": ["running · shell"], "lacks": ["stale", "No agent is working on this lane:"]}]
+}

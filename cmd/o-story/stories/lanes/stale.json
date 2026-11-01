@@ -1,0 +1,17 @@
+{
+  "name": "lanes/stale",
+  "app": "o-lane",
+  "width": 160,
+  "height": 46,
+  "seed": {
+    "lanes": [{"name": "Implementation", "wording": "Keep the owner words"}, {"name": "Aardvark"}],
+    "start": "Implementation",
+    "associations": [{"lane": "Implementation", "pane": {"session": "fixture-session", "window": "fixture-window", "role": "implementer"}}]
+  },
+  "script": ["j", "k"],
+  "theme": "dark",
+  "expect": [
+    {"after": 2, "contains": ["stale", "No agent is working on this lane:", "fixture-window", "Set review,", "parked or done with a note."]},
+    {"after": 1, "highlightedText": "Aardvark", "styled": {"stale": "#E3B341"}}
+  ]
+}

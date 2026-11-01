@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Flag lanes whose recorded `lanes.states` row has `starts:true` and whose own current participants are all inactive or gone: State-cell warning, detail explanation, read-only `stale` bool, default `stale` saved filter and `lane list --stale`. `lanes.stale-flag` defaults to true; disabling it or live reads disables the projection. Live-state activity comes from row data, independent of labels and aggregate roles; failed/unknown reads never prove staleness. Report known state-change times or explicitly labelled observations.
+
 - A pane belongs to one lane at a time: associating it with a lane removes it from its other lanes (one change and one undo), records `unassociate` with `moved_to` on each, and lists them in the answer's `moved_from`. Existing data with a pane on several lanes reads correctly without migration: only the lane with the latest association shows the pane's live status; older lanes show `moved to lane NAME` in pane detail. `lanes.pane-one-lane` (default true) turns this off.
 - Lanes page: the detail opens with the focused lane's state, a plain description of what it means and the reason (the state change's note, else the last note before it). Descriptions are an optional `description` field on `lanes.states` rows; defaults describe every state except planned. `lane show`/`lane rows` add `state_description` and `state_reason`. Pane detail labels live status `agent <state>` and the `live state` field reads `agent status`. `lanes.state-descriptions` (default true) turns the section off.
 - Accept tuios session/window lists as either JSON arrays or named objects for pane choices and live snapshots; preserve explicit session/window targets when focusing a lane's pane with `g p`.

@@ -17,7 +17,7 @@ func (a *App) declareProps() {
 		props = append(props, ochazuke.PropSpec{Name: name, Parameter: ochazuke.Parameter{Type: kind}})
 	}
 	props = append(props, filterProps()...)
-	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.stateRows()))
+	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.stateRows()), ochazuke.SavedFilter{Name: "stale", Noun: "lane", Conditions: []ochazuke.PropFilter{{Prop: "stale", Value: true}}})
 	a.r.Define("lane").Store(ochazuke.Store{Kind: ochazuke.Collection,
 		Get: func(c ochazuke.Ctx, id string) (ochazuke.Thing, error) {
 			q, e := a.store.Resolve(id)
@@ -81,6 +81,7 @@ func filterProps() []ochazuke.PropSpec {
 		{"started", "string", "First start (RFC 3339); empty when never started"},
 		{"finished", "string", "Finish time (RFC 3339); empty while open"},
 		{"pane_count", ochazuke.SettingInteger, "Associated panes"},
+		{"stale", ochazuke.SettingBoolean, "Working lifecycle state with no working participant; false when live reads or stale flags are off"},
 	} {
 		out = append(out, ochazuke.PropSpec{Name: row.name, ReadOnly: true, Parameter: ochazuke.Parameter{Type: row.kind, Description: row.desc}})
 	}

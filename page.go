@@ -106,6 +106,8 @@ type pageOptions struct {
 	live                                                               liveOptions
 	liveTones                                                          bool
 	liveRows                                                           map[string]Live
+	ownLiveRows                                                        map[string]Live
+	staleFlag                                                          bool
 	groupProjects, projectColumn, nameTone, stateAbout                 bool
 	project                                                            string
 	states                                                             []string
@@ -114,7 +116,7 @@ type pageOptions struct {
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter")}
+	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter")}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -151,6 +153,10 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 		{Kind: "markdown", Title: "Panes", Field: "pane_detail"},
 		{Kind: "fields", Title: "Fields", Fields: fields},
 	}}
+	if o.staleFlag {
+		p.Detail.Sections = append([]ocli.CatalogDetailSection{{Kind: "markdown", Field: "stale_reason"}}, p.Detail.Sections...)
+		p.Detail.Fields = append(p.Detail.Fields, "stale_reason")
+	}
 	if o.stateAbout {
 		// Untitled, so a state without a description draws nothing at all.
 		p.Detail.Sections = append([]ocli.CatalogDetailSection{{Kind: "markdown", Field: "state_about"}}, p.Detail.Sections...)
@@ -184,8 +190,10 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 			snapshots = snapshotScopes(ctx, panes, run)
 		}
 		o.liveRows = map[string]Live{}
+		o.ownLiveRows = map[string]Live{}
 		for _, q := range rows {
 			o.liveRows[q.ID] = aggregateLive(s.panesInSubtree(rows, q), o.live, snapshots)
+			o.ownLiveRows[q.ID] = aggregateLive(s.ownPanes(rows, q), o.live, snapshots)
 		}
 	}
 	return projectLaneRows(s, o, rows)
@@ -266,6 +274,14 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				if live.Glyph != "" {
 					cells[0] = live.Glyph + " " + q.Name
 				}
+			}
+			stale, staleReason := false, ""
+			if own, ok := o.ownLiveRows[q.ID]; ok && o.live.on {
+				stale, staleReason = staleLane(q, s.states(), own, o.staleFlag, o.now)
+			}
+			staleStart := len([]rune(cells[1])) + 3
+			if stale {
+				cells[1] += " · stale"
 			}
 			duration := ""
 			if o.durations {
@@ -363,6 +379,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				data["live"] = live
 				data["live_state"] = live.State
 			}
+			data["stale"], data["stale_reason"] = stale, staleReason
 			laneFilterValues(data, q)
 			if about := stateAbout(q.State, v.StateDescription, v.StateReason); o.stateAbout && about != "" {
 				data["state_about"] = about
@@ -425,6 +442,9 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				if live.Glyph != "" {
 					row.Tones = append(row.Tones, ochazuke.SpanTone(0, 0, len([]rune(live.Glyph)), live.Tone))
 				}
+			}
+			if stale && o.tones {
+				row.Tones = append(row.Tones, ochazuke.SpanTone(1, staleStart, 0, ochazuke.ToneNeedsInput))
 			}
 			if o.nameTone && nameTone != "" {
 				row.Tones = append(row.Tones, ochazuke.CellTone(0, nameTone))

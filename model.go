@@ -95,6 +95,8 @@ type Lane struct {
 type View struct {
 	Lane
 	Live            *Live      `json:"live,omitempty"`
+	Stale           bool       `json:"stale"`
+	StaleReason     string     `json:"stale_reason,omitempty"`
 	Started         *time.Time `json:"started"`
 	Finished        *time.Time `json:"finished"`
 	EstimateMinutes float64    `json:"estimate_minutes"`

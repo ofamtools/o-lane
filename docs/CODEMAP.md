@@ -2,7 +2,7 @@
 
 - `main.go`: XDG data path, global `--data`, oden dispatch and ochazuke CLI mount.
 - `app.go`: catalog verbs, explicit app nouns, shared relation dispatch, transport-bound actors, settings configuration and target reveal.
-- `props.go`: framework standard typed `get`/`set` over the lane store, read-only filter props for prop filters and the default `open` saved filter (kept in step with `lanes.states` by `configure`).
+- `props.go`: framework standard typed `get`/`set` over the lane store, read-only filter props for prop filters and the default `open` and `stale` saved filters (kept in step with `lanes.states` by `configure`).
 - `agents.go`: agent participants' derived live state from `lanes.agent-harnesses` rows (transcript templates, tail time field, idle, hook event map, payload fields), the incremental append-only hook log (`agent-events.jsonl`), the lazy per-refresh agent reader, `agent-hook` (bounded, lock-free, exit 0) and `agent list` rows.
 - `setup.go`, `setup.json`: o-lane's declarative integrations for ochazuke's shared setup verbs; the Claude Code SubagentStart/SubagentStop hook items.
 - `agents_test.go`, `testdata/agents/`: agent association round trip, fixed-clock working/idle/done/missing states, captured Claude Code hook payloads (copied from tuios), stuck-stdin bound, and setup install/idempotence/backup/plan/uninstall against a temp settings.json that already has tuios hooks; the `lanes/agent-working` story uses the fixture transcript.
@@ -17,7 +17,8 @@
 - `store.go`: process lock, per-root documents, transaction recovery, snapshots and actor-safe undo with append-only audit receipts.
 - `atomic.go`: private synced temporary writes, rename and directory sync (adapted from o-questions).
 - `backup.go`: daily private tar/gzip archives and retention (adapted from o-questions).
-- `live.go`: validated data-driven live labels/tones/glyphs (including legacy string maps), explicit host/session snapshot batching, all-level subtree aggregation (a pane counts only for the lane holding its latest association, `paneHolder`), CLI read enrichment and cancellable argv focus. Role filters narrow aggregates while retaining pane details; all live state is derived.
+- `stale.go`, `stale_test.go`: read-only stale projection from lifecycle `starts` and each lane's own current participants, conservative unknown evidence, activity metadata, CLI filter, saved/typed filters, opt-outs and timestamp checks; `lanes/stale` and `lanes/stale-off` stories capture the list/detail and opt-out.
+- `live.go`: validated data-driven live labels/tones/glyphs (including legacy string maps), explicit host/session snapshot batching with state-change timestamps, all-level subtree aggregation (a pane counts only for the lane holding its latest association, `paneHolder`), CLI read enrichment and cancellable argv focus. Role filters narrow aggregates while retaining pane details; all live state is derived.
 - `live_reader.go`: incremental stdout through the existing injectable runner, bounded scanner/event/notification queues, mutex-protected snapshot cache, seq/boot reconnect, gap resync, replay ceiling, bounded backoff and cancellation. Settings and framework objects stay on the UI loop.
 - `live_test.go`, `testdata/live/`: aggregate/settings/snapshot/persistence tables, recorded gap/replay/close streams, boot-change and page-reader lifecycle regressions. A stub tuios executable on temporary PATH exercises the production runner without a daemon.
 - `tuios_json.go`, `tuios_json_test.go`, `testdata/tuios/`: one array/object list decoder shared by pane discovery and live snapshots; normalized command captures cover both session/window shapes and `g p` focus to the recorded session/window.

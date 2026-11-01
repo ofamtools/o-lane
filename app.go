@@ -166,7 +166,7 @@ func (a *App) specs() []verbSpec {
 		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false},
 		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false},
 		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true},
-		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "project": projectFilter, "state": stateParam("")}, nil, true},
+		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "stale": {Type: "boolean", Description: "Only working lifecycle states with no working participant (requires live reads)"}, "project": projectFilter, "state": stateParam("")}, nil, true},
 		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project"), "state": stateParam("ancestors of matches stay as context")}, nil, true},
 		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
 		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true},
@@ -433,6 +433,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			}
 		}
 		e = a.enrichLive(out)
+		if only, _ := c.Args["stale"].(bool); only {
+			out = slices.DeleteFunc(out, func(v View) bool { return !v.Stale })
+		}
 		return done(out, e)
 	case "show", "history", "live", "focus-pane", "yank-id", "yank-path":
 		q, e := s.Resolve(target)

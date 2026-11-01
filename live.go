@@ -13,18 +13,21 @@ import (
 
 // LiveState is presentation data, shared by the CLI and portable page.
 type LiveState struct {
-	Name  string `json:"name"`
-	Tone  string `json:"tone,omitempty"`
-	Glyph string `json:"glyph,omitempty"`
+	Name    string `json:"name"`
+	Tone    string `json:"tone,omitempty"`
+	Glyph   string `json:"glyph,omitempty"`
+	Working bool   `json:"working,omitempty"`
 }
 type LivePane struct {
 	Pane
 	// AgentLive is an agent participant's derived state, when agents are read.
-	AgentLive *AgentStatus `json:"agent_live,omitempty"`
-	State     string       `json:"live"`
-	Tone      string       `json:"tone,omitempty"`
-	Glyph     string       `json:"glyph,omitempty"`
-	Error     string       `json:"error,omitempty"`
+	AgentLive      *AgentStatus `json:"agent_live,omitempty"`
+	State          string       `json:"live"`
+	Tone           string       `json:"tone,omitempty"`
+	Glyph          string       `json:"glyph,omitempty"`
+	Error          string       `json:"error,omitempty"`
+	StateSince     *time.Time   `json:"state_since,omitempty"`
+	known, working bool
 }
 type Live struct {
 	State string     `json:"state"`
@@ -33,8 +36,9 @@ type Live struct {
 	Panes []LivePane `json:"panes"`
 }
 type windowState struct {
-	Window string `json:"window_id"`
-	State  string `json:"agent_state"`
+	Window  string `json:"window_id"`
+	State   string `json:"agent_state"`
+	StateAt int64  `json:"agent_state_at"`
 }
 type commandRunner func(context.Context, []string) ([]byte, error)
 type liveOptions struct {
@@ -55,8 +59,12 @@ func parseLiveStates(text string) (map[string]LiveState, error) {
 		return nil, errors.New("lanes.live-states needs a JSON object")
 	}
 	out := map[string]LiveState{}
+	// Label-only overrides retain the activity semantics from the default
+	// data. An object can explicitly override working, including to false.
+	defaults := map[string]LiveState{}
+	_ = json.Unmarshal([]byte(defaultLiveStates), &defaults)
 	for key, value := range raw {
-		var state LiveState
+		state := LiveState{Working: defaults[key].Working}
 		if json.Unmarshal(value, &state.Name) != nil {
 			if err := json.Unmarshal(value, &state); err != nil {
 				return nil, err
@@ -90,11 +98,17 @@ func (s *Store) panesInSubtree(rows []Lane, q Lane) []Pane {
 	panes := []Pane{}
 	for _, row := range rows {
 		if row.ID == q.ID || descendant(rows, row.ID, q.ID) {
-			for _, p := range row.Panes {
-				if s.PanesShared || paneHolder(rows, row.ID, p) == "" {
-					panes = append(panes, p)
-				}
-			}
+			panes = append(panes, s.ownPanes(rows, row)...)
+		}
+	}
+	return panes
+}
+
+func (s *Store) ownPanes(rows []Lane, q Lane) []Pane {
+	panes := []Pane{}
+	for _, p := range q.Panes {
+		if s.PanesShared || paneHolder(rows, q.ID, p) == "" {
+			panes = append(panes, p)
 		}
 	}
 	return panes
@@ -126,8 +140,9 @@ func (a *App) associatedPanes(q Lane) ([]Pane, error) {
 
 type liveScope struct{ Host, Session string }
 type liveSnapshot struct {
-	windows map[string]string
-	err     error
+	windows    map[string]string
+	stateTimes map[string]time.Time
+	err        error
 }
 type liveSnapshots map[liveScope]liveSnapshot
 
@@ -142,7 +157,7 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 		if _, ok := out[key]; ok {
 			continue
 		}
-		snap := liveSnapshot{windows: map[string]string{}}
+		snap := liveSnapshot{windows: map[string]string{}, stateTimes: map[string]time.Time{}}
 		if p.Session == "" {
 			snap.err = errors.New("pane session is unassociated")
 		} else {
@@ -159,6 +174,9 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 				snap.err = err
 				for _, w := range windows {
 					snap.windows[w.Window] = w.State
+					if w.StateAt != 0 {
+						snap.stateTimes[w.Window] = time.Unix(0, w.StateAt).UTC()
+					}
 				}
 			}
 		}
@@ -184,6 +202,7 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 				mapped.Name = st.State
 			}
 			item.State, item.Tone, item.Glyph = mapped.Name, mapped.Tone, mapped.Glyph
+			item.known, item.working = ok, mapped.Working
 		} else if p.Window != "" {
 			snap, ok := snapshots[scopeOf(p)]
 			if !ok || snap.err != nil {
@@ -204,6 +223,10 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 					}
 				}
 				item.State, item.Tone, item.Glyph = st.Name, st.Tone, st.Glyph
+				item.known, item.working = ok, st.Working
+				if at, ok := snap.stateTimes[p.Window]; ok {
+					item.StateSince = &at
+				}
 			}
 		}
 		out.Panes = append(out.Panes, item)
@@ -340,6 +363,8 @@ func (a *App) enrichLive(views []View) error {
 	for i := range views {
 		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
 		views[i].Live = &v
+		own := aggregateLive(a.store.ownPanes(rows, views[i].Lane), o, snapshots)
+		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.states(), own, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
 	}
 	return nil
 }

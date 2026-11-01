@@ -75,7 +75,7 @@ func mountPage(a *App) (*page, error) {
 			a.r.UI().Status(err.Error())
 		}
 	}
-	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.live-tones", "lanes.live-states", "lanes.live-precedence", "lanes.live-roles", "lanes.project-filter", "lanes.state-filter"} {
+	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.stale-flag", "lanes.live-tones", "lanes.live-states", "lanes.live-precedence", "lanes.live-roles", "lanes.project-filter", "lanes.state-filter"} {
 		a.r.Settings().Observe(name, func(string, any) { p.dirty = true })
 	}
 	a.showUI = func(q View) error {
@@ -267,7 +267,7 @@ func openLaneDetail(r *ochazuke.Runtime, title string, data any) error {
 func laneDetailText(value any) string {
 	data, _ := value.(map[string]any)
 	var text strings.Builder
-	for _, name := range []string{"name", "state", "live_state", "wording", "scope", "done_when", "pane_detail", "repo", "base", "branch", "worktree", "estimate", "duration", "depends", "plan", "task", "tests", "links", "started", "finished"} {
+	for _, name := range []string{"name", "state", "live_state", "stale_reason", "wording", "scope", "done_when", "pane_detail", "repo", "base", "branch", "worktree", "estimate", "duration", "depends", "plan", "task", "tests", "links", "started", "finished"} {
 		v := data[name]
 		if v == nil || v == "" {
 			continue

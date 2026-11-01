@@ -102,9 +102,12 @@ func (r *liveReader) current(panes []Pane) liveSnapshots {
 	}
 	out := liveSnapshots{}
 	for key, snap := range r.snapshots {
-		copy := liveSnapshot{windows: map[string]string{}, err: snap.err}
+		copy := liveSnapshot{windows: map[string]string{}, stateTimes: map[string]time.Time{}, err: snap.err}
 		for id, state := range snap.windows {
 			copy.windows[id] = state
+		}
+		for id, at := range snap.stateTimes {
+			copy.stateTimes[id] = at
 		}
 		out[key] = copy
 	}
@@ -152,6 +155,9 @@ func (r *liveReader) apply(event liveEvent) bool {
 	} else {
 		snap.windows[event.Window] = event.State
 	}
+	// Events do not carry a state-change timestamp. Drop the snapshot time
+	// rather than attaching an old state's time to this observation.
+	delete(snap.stateTimes, event.Window)
 	r.snapshots[key] = snap
 	if relevant {
 		r.notify()
