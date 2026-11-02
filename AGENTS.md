@@ -4,7 +4,7 @@ Created by o-proj.
 
 ## Plans and todos
 
-Family plans, todos and the roadmap live in `~/hub/o-plans/` (`README.md` is the index). Read it before planning work; add or update items there. Do not add a TODO.md or docs/plans/ to this repo.
+Keep planning work in the family planning workspace, separate from this repository. Do not add a TODO.md or docs/plans/ to this repo.
 
 ## Implementation
 
