@@ -261,7 +261,7 @@ func openLaneDetail(r *ochazuke.Runtime, title string, data any) error {
 		return e
 	}
 	inst.Component = &laneDetail{title: title, text: laneDetailText(data), detail: d}
-	return nil
+	return r.SetFocus(d.ID())
 }
 
 func laneDetailText(value any) string {

@@ -362,15 +362,64 @@ func TestPageFocusAndYank(t *testing.T) {
 	if got := a.r.Registers().Named["\""].Yank.Text; got != q.ID {
 		t.Fatalf("yank %q want %q", got, q.ID)
 	}
-	pageKey(t, p, "enter")
-	if a.r.TopModal() != "lane-detail" {
-		t.Fatal("show did not open detail", a.r.TopModal())
-	}
-	pageKey(t, p, "esc")
-	if a.r.TopModal() != "" {
-		t.Fatal("detail did not close")
+	for _, key := range []string{"esc", "q"} {
+		pageKey(t, p, "enter")
+		if a.r.TopModal() != "lane-detail" {
+			t.Fatal("show did not open detail", a.r.TopModal())
+		}
+		pageKey(t, p, key)
+		if a.r.TopModal() != "" {
+			t.Fatalf("%s did not close detail", key)
+		}
 	}
 }
+func TestPageDetailSharedMotions(t *testing.T) {
+	for _, height := range []int{26, 38} {
+		t.Run(fmt.Sprint(height), func(t *testing.T) {
+			a := pageFixture(t)
+			seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Implementation"}]}`))
+			p, err := mountPage(a)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.m.Width, p.m.Height = 100, height
+			p.m.View()
+			focus := a.r.Focus
+			if err := openLaneDetail(a.r, "Long detail", map[string]any{"wording": strings.Repeat("A line of lane detail\n", 100)}); err != nil {
+				t.Fatal(err)
+			}
+			p.m.View()
+			detail := a.r.Detail("lane-detail/text")
+			pageLines := detail.PageLines()
+			if pageLines <= 0 {
+				t.Fatal("detail did not overflow")
+			}
+			pageKey(t, p, "ctrl+d")
+			if got := detail.Offset(); got != pageLines/2 {
+				t.Fatalf("half-page moved %d lines in a %d-line window", got, pageLines)
+			}
+			pageKey(t, p, "G")
+			last := detail.Offset()
+			if last <= pageLines {
+				t.Fatalf("last window offset = %d", last)
+			}
+			pageKey(t, p, "ctrl+u")
+			if got := detail.Offset(); got != last-pageLines/2 {
+				t.Fatalf("half-page up offset = %d", got)
+			}
+			pageKey(t, p, "g")
+			pageKey(t, p, "g")
+			if got := detail.Offset(); got != 0 {
+				t.Fatalf("first window offset = %d", got)
+			}
+			pageKey(t, p, "q")
+			if a.r.TopModal() != "" || a.r.Focus != focus {
+				t.Fatalf("close left modal %q, focus %q; want %q", a.r.TopModal(), a.r.Focus, focus)
+			}
+		})
+	}
+}
+
 func TestPagePaneChoices(t *testing.T) {
 	a := pageFixture(t)
 	choices, e := a.paneChoices(context.Background())

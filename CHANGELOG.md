@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Upgrade ochazuke to v0.83.0 and monogatari to v0.4.1. Lane detail modals use the framework's shared close, edge and window-sized paging motions; update the status-filter journey for the live filter form.
+
 - Avoid false stale flags on working lanes when any working descendant has an active participant, including tuios `needs_input` approval/question/auth waits. Reuse the single `lanes.live-states` activity mapping, independent of role filters. Resolve unique pane ID prefixes to full IDs when associating (including `start` and the pane-side verb), retaining the supplied ID on failed or ambiguous lookup; live snapshots and subscription updates also match existing stored prefixes within their host/session.
 
 - Clean temporary paths before the CLI fixture containment check, including when `TMPDIR` ends in a slash.

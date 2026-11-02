@@ -25,14 +25,14 @@
   "script": [
     "z",
     "/",
+    ":",
     {
-      "type": "status"
+      "type": "focus set list-filter-form/status"
     },
     "enter",
-    {
-      "type": "running"
-    },
-    "enter"
+    "l",
+    "space",
+    "esc"
   ],
   "expect": [
     {
@@ -45,13 +45,15 @@
       ]
     },
     {
-      "after": 4,
+      "after": 5,
+      "modal": "list-filter-form",
       "contains": [
-        "running"
+        "status · is",
+        "○ running"
       ]
     },
     {
-      "after": 6,
+      "after": 8,
       "modal": "",
       "contains": [
         "[status = running]"

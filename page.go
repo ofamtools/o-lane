@@ -93,10 +93,9 @@ func (a *App) registerPage() error {
 	for _, row := range []struct {
 		key   string
 		lines int
-	}{{"j", 1}, {"k", -1}, {"ctrl+d", 8}, {"ctrl+u", -8}, {"g g", -1000000}, {"G", 1000000}} {
+	}{{"j", 1}, {"k", -1}} {
 		detail.Bind(row.key, ochazuke.Do("ochazuke.detail.scroll", ochazuke.Arguments{"id": "lane-detail/text", "lines": row.lines}))
 	}
-	detail.Bind("q", ochazuke.Do("ochazuke.modal.pop")).Bind("esc", ochazuke.Do("ochazuke.modal.pop"))
 	return ocli.DeclarePage(a.r, lanePage(a.pageOptions()))
 }
 
