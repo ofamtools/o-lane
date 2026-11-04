@@ -115,7 +115,7 @@ func (p *page) reload() tea.Cmd {
 	if current, next := p.v.Spec().Detail, lanePage(o).Detail; current != nil && next != nil {
 		*current = *next
 	}
-	if _, err := p.a.r.Execute(ochazuke.Request{Noun: "lane", Verb: "rows", Target: pageID, Args: ochazuke.Arguments{"archived": true}}); err != nil {
+	if _, err := p.a.r.Execute(ochazuke.Request{Noun: "lane", Verb: pageRowsVerb, Target: pageID}); err != nil {
 		p.a.r.UI().Status(err.Error())
 	}
 	return p.a.r.PendingCommands()

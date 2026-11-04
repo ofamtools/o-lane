@@ -59,31 +59,42 @@ func (a *App) registerPage() error {
 	a.r.DefineOwn("pane").Verb("roles", func(c ochazuke.Ctx) ochazuke.Result {
 		return done(a.r.Settings().Strings("lanes.pane-roles"), nil)
 	}, "List configured participant roles").Fetch().Quiet().Agent(ochazuke.AgentAllow)
-	a.r.DefineOwn("lane").Verb("rows", func(c ochazuke.Ctx) ochazuke.Result {
-		if e := a.configure(); e != nil {
-			return done(nil, e)
-		}
-		s, o := *a.store, a.pageOptions()
-		if project := ochazuke.StringArg(c.Args, "project", ""); project != "" {
-			o.project = project
-		}
-		if states := stateList(c.Args["state"]); len(states) > 0 {
-			o.states = states
-		}
-		if e := a.store.checkStates(o.states); e != nil {
-			return done(nil, e)
-		}
-		o.listHides, _ = c.Args["archived"].(bool)
-		reader, run := a.reader, commandRunner(a.run)
-		return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
-			if a.rowsLoaded != nil {
-				rows, _ := value.([]ocli.Row)
-				a.rowsLoaded(rows, e)
+	rows := func(listHides bool) func(c ochazuke.Ctx) ochazuke.Result {
+		return func(c ochazuke.Ctx) ochazuke.Result {
+			if e := a.configure(); e != nil {
+				return done(nil, e)
 			}
-		})
-	}, "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+			s, o := *a.store, a.pageOptions()
+			if project := ochazuke.StringArg(c.Args, "project", ""); project != "" {
+				o.project = project
+			}
+			if states := stateList(c.Args["state"]); len(states) > 0 {
+				o.states = states
+			}
+			if e := a.store.checkStates(o.states); e != nil {
+				return done(nil, e)
+			}
+			o.listHides = listHides
+			if !listHides {
+				o.listHides, _ = c.Args["archived"].(bool)
+			}
+			reader, run := a.reader, commandRunner(a.run)
+			return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
+				if a.rowsLoaded != nil {
+					rows, _ := value.([]ocli.Row)
+					a.rowsLoaded(rows, e)
+				}
+			})
+		}
+	}
+	a.r.DefineOwn("lane").Verb("rows", rows(false), "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+	a.r.DefineOwn("lane").Verb(pageRowsVerb, rows(true), "List the Lanes page's rows: archived lanes kept and flagged for the list to hide or show (same handler and parameters as lane.rows, without archived)").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+	params := map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter")}
+	pageOp := a.r.Operations["lane."+pageRowsVerb]
+	pageOp.Parameters = params
+	a.r.Operations[pageOp.Key()] = pageOp
 	rowsOp := a.r.Operations["lane.rows"]
-	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter"), "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a state names an archive state"}}
+	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": params["project"], "state": params["state"], "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a state names an archive state"}}
 	a.r.Operations[rowsOp.Key()] = rowsOp
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
@@ -99,6 +110,11 @@ func (a *App) registerPage() error {
 	}
 	return ocli.DeclarePage(a.r, lanePage(a.pageOptions()))
 }
+
+// pageRowsVerb is the Lanes page's row source: lane.rows that always leaves
+// archived lanes to the list. A mounted page fetches its source with no
+// arguments, so the flag cannot ride on lane.rows.
+const pageRowsVerb = "page-rows"
 
 type pageOptions struct {
 	tree, guides, durations, panes, history, tones, detail, hideClosed bool
@@ -139,7 +155,7 @@ func (o pageOptions) columns() []ochazuke.Column {
 	return append(cols, ochazuke.Column{Title: "Agents", Max: 44, Priority: 6})
 }
 func lanePage(o pageOptions) ocli.CatalogPage {
-	p := ocli.CatalogPage{ID: pageID, Title: "Lanes", Layout: ocli.LayoutStack, Lists: []ocli.CatalogList{{ID: listID, Noun: "lane", Source: "lane.rows", Title: "Lanes", Tree: o.tree, Guides: o.guides}}}
+	p := ocli.CatalogPage{ID: pageID, Title: "Lanes", Layout: ocli.LayoutStack, Lists: []ocli.CatalogList{{ID: listID, Noun: "lane", Source: "lane." + pageRowsVerb, Title: "Lanes", Tree: o.tree, Guides: o.guides}}}
 	if !o.detail {
 		return p
 	}

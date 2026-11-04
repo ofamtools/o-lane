@@ -12,7 +12,7 @@
     {"type": "Worker"},
     "enter",
     "enter",
-    {"job": "lane.rows", "state": "done"},
+    {"job": "lane.page-rows", "state": "done"},
     "g",
     "p",
     {"job": "lane.focus-pane", "state": "done"}

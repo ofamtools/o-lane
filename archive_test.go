@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"ofam.dev/ochazuke"
+	ocli "ofam.dev/ochazuke/cli"
 )
 
 func listed(t *testing.T, f *cliFixture, key string, args ...string) string {
@@ -177,5 +179,46 @@ func TestArchiveAgentRights(t *testing.T) {
 		if seen[name] != ochazuke.AgentAllow {
 			t.Fatalf("lane.%s agent right = %q", name, seen[name])
 		}
+	}
+}
+
+// A mounted page fetches its list source with no arguments, so the catalog's
+// source must itself answer archived lanes (flagged) while plain lane.rows
+// with no arguments keeps dropping them.
+func TestCatalogListSourceKeepsArchivedRows(t *testing.T) {
+	f := newCLI(t)
+	f.a.store.BackupDaily = false
+	f.lane("add", "Live")
+	f.lane("add", "Old")
+	f.lane("archive", "Old")
+	b, e := ocli.Catalog(f.a.r, "o-lane", version)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var doc ocli.CatalogDoc
+	if e = json.Unmarshal(b, &doc); e != nil {
+		t.Fatal(e)
+	}
+	src := doc.Pages[0].Lists[0].Source
+	if src == "lane.rows" {
+		t.Fatal("list source is lane.rows, which drops archived lanes")
+	}
+	noun, verb, _ := strings.Cut(src, ".")
+	rows := asRows(t, f.call(noun, verb))
+	if got := labels(rows, "label"); got != "Live,Old" {
+		t.Fatal("source rows:", got)
+	}
+	flagged := false
+	for _, r := range rows {
+		if r["label"] == "Old" {
+			raw, _ := json.Marshal(r)
+			flagged = strings.Contains(string(raw), `"archived":true`)
+		}
+	}
+	if !flagged {
+		t.Fatal("archived row not flagged:", rows)
+	}
+	if got := listed(t, f, "label", "lane", "rows"); got != "Live" {
+		t.Fatal("lane.rows with no args:", got)
 	}
 }
