@@ -180,10 +180,10 @@ func (a *App) specs() []verbSpec {
 		{"lane", "focus-pane", "Focus an associated pane using the configured argv", common(map[string]ochazuke.Parameter{"role": param("Optional role filter")}), []string{"target"}, true, ""},
 		{"lane", "yank-id", "Copy the lane ID to the framework register", common(nil), []string{"target"}, true, ""},
 		{"lane", "yank-path", "Copy the worktree path to the framework register", common(nil), []string{"target"}, true, ""},
-		{"lane", "delete", "Hide a lane and subtree; undo restores them", common(nil), []string{"target"}, false, ochazuke.AgentNever},
+		{"lane", "delete", "Hide a lane and subtree for good; undo restores them. Agents archive instead (lane archive, or lane state archived)", common(nil), []string{"target"}, false, ochazuke.AgentNever},
 		{"lane", "undo", "Restore the latest change; agents can undo their own latest change", nil, nil, false, ""},
 	}
-	for _, v := range []struct{ name, desc string }{{"park", "Park"}, {"review", "Request review"}, {"merge", "Record merge and optional commit"}, {"finish", "Mark done"}, {"cancel", "Cancel"}, {"reopen", "Reopen as planned"}} {
+	for _, v := range []struct{ name, desc string }{{"park", "Park"}, {"review", "Request review"}, {"merge", "Record merge and optional commit"}, {"finish", "Mark done"}, {"cancel", "Cancel"}, {"reopen", "Reopen as planned"}, {"archive", "Archive: hide from the default views, keep the record; restore undoes it"}} {
 		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}), []string{"target"}, false, ""})
 	}
 	for _, verb := range []string{"link", "unlink"} {
@@ -335,6 +335,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			return done(nil, e)
 		}
 	}
+	hideArchived := a.r.Settings().Bool("list.hide-archived")
 	inStates := func(q Lane) bool { return len(states) == 0 || slices.Contains(states, q.State) }
 	if noun == "project" {
 		switch verb {
@@ -344,8 +345,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 				return done(nil, e)
 			}
 			out := []View{}
+			hidden := s.archiveHidden(rows, states, hideArchived)
 			for _, q := range rows {
-				if v := s.view(q, rows); projectMatches(v.EffectiveProject, project) && inStates(q) {
+				if v := s.view(q, rows); projectMatches(v.EffectiveProject, project) && inStates(q) && !hidden[q.ID] {
 					out = append(out, v)
 				}
 			}
@@ -392,8 +394,9 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 		}
 		out := []View{}
 		kept := stateKept(rows, states)
+		hidden := s.archiveHidden(rows, states, hideArchived)
 		inProject := func(q Lane) bool {
-			return (project == "" || subtreeProject(rows, q, project)) && (kept == nil || kept[q.ID])
+			return (project == "" || subtreeProject(rows, q, project)) && (kept == nil || kept[q.ID]) && !hidden[q.ID]
 		}
 		var walk func(string, bool)
 		walk = func(parent string, hide bool) {
@@ -425,7 +428,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 			}
 			for _, q := range rows {
 				v := s.view(q, rows)
-				if (parent == "" || q.Parent == parent) && (project == "" || projectMatches(v.EffectiveProject, project)) && inStates(q) {
+				if (parent == "" || q.Parent == parent) && (project == "" || projectMatches(v.EffectiveProject, project)) && inStates(q) && !hidden[q.ID] {
 					out = append(out, v)
 				}
 			}
@@ -552,7 +555,7 @@ func (a *App) handle(noun, verb string, c ochazuke.Ctx) ochazuke.Result {
 	case "undo":
 		e := s.Undo()
 		return done("undone", e)
-	case "park", "review", "merge", "finish", "cancel", "reopen":
+	case "park", "review", "merge", "finish", "cancel", "reopen", "archive":
 		if verb == "merge" {
 			q, e := s.Merge(target, str("commit"), str("note"))
 			return done(q, e)

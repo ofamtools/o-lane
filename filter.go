@@ -88,7 +88,7 @@ func stateKept(lanes []Lane, states []string) map[string]bool {
 // laneFilterValues makes every filter prop present in a row's data, so
 // = and != conditions compare an empty value rather than failing on a
 // missing key (Spec fields omit empty values in JSON).
-func laneFilterValues(data ochazuke.Thing, q Lane) {
+func laneFilterValues(data ochazuke.Thing, q Lane, archived bool) {
 	for _, name := range append([]string{"live_state", "started", "finished", "parent", "effective_project"}, editable...) {
 		if name == "depends" {
 			continue
@@ -98,5 +98,6 @@ func laneFilterValues(data ochazuke.Thing, q Lane) {
 		}
 	}
 	data["status"] = q.State
+	data[archiveProp] = archived
 	data["pane_count"] = len(q.Panes)
 }

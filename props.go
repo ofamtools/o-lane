@@ -1,12 +1,19 @@
 package main
 
 import (
-	"ofam.dev/ochazuke"
+	"fmt"
 	"slices"
+	"strings"
+
+	"ofam.dev/ochazuke"
 )
 
 // Reuse the framework's standard typed set/get verbs, including multi-property
 // writes and property shorthand. Domain-only operations keep explicit verbs.
+// archiveProp is the lane prop with the archive role; its value is whether
+// the lane's state row carries archive:true.
+const archiveProp = "archived"
+
 func (a *App) declareProps() {
 	props := []ochazuke.PropSpec{{Name: "id", Parameter: ochazuke.Parameter{Type: "string"}, Key: true}}
 	for _, name := range editable {
@@ -17,14 +24,25 @@ func (a *App) declareProps() {
 		props = append(props, ochazuke.PropSpec{Name: name, Parameter: ochazuke.Parameter{Type: kind}})
 	}
 	props = append(props, filterProps()...)
+	// Writable archive-role prop: ochazuke derives archive/restore, the
+	// archived saved filter and list.hide-archived from it; a write moves the
+	// lane to or from the lanes.states row with archive:true (setArchived).
+	props = append(props, ochazuke.PropSpec{Name: archiveProp, Role: ochazuke.RoleArchive, Parameter: ochazuke.Parameter{Type: ochazuke.SettingBoolean, Description: "In the archive state (the lanes.states row with archive:true); writing it archives or restores the lane"}})
 	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.stateRows()), ochazuke.SavedFilter{Name: "stale", Noun: "lane", Conditions: []ochazuke.PropFilter{{Prop: "stale", Value: true}}})
 	a.r.Define("lane").Store(ochazuke.Store{Kind: ochazuke.Collection,
 		Get: func(c ochazuke.Ctx, id string) (ochazuke.Thing, error) {
+			if e := a.configure(); e != nil {
+				return nil, e
+			}
 			q, e := a.store.Resolve(id)
 			if e != nil {
 				return nil, e
 			}
-			return ochazuke.ThingOf(q)
+			t, e := ochazuke.ThingOf(q)
+			if e == nil {
+				t[archiveProp] = a.store.states()[q.State].Archive
+			}
+			return t, e
 		},
 		Patch: func(c ochazuke.Ctx, id string, changes ochazuke.Thing) (ochazuke.Thing, error) {
 			if e := a.configure(); e != nil {
@@ -37,12 +55,26 @@ func (a *App) declareProps() {
 					keys = append(keys, key)
 				}
 				slices.Sort(keys)
+				edited := false
 				for _, key := range keys {
+					if key == archiveProp {
+						on, e := archiveFlag(changes[key])
+						if e != nil {
+							return e
+						}
+						if e = a.store.setArchived(q, on, ""); e != nil {
+							return e
+						}
+						continue
+					}
 					if e := setSpec(&q.Spec, key, changes[key]); e != nil {
 						return e
 					}
+					edited = true
 				}
-				a.store.entry(q, "edit", "", "", "set", nil, nil)
+				if edited {
+					a.store.entry(q, "edit", "", "", "set", nil, nil)
+				}
 				return nil
 			})
 			if e != nil {
@@ -51,13 +83,18 @@ func (a *App) declareProps() {
 			if a.changed != nil {
 				a.changed()
 			}
-			return ochazuke.ThingOf(q)
+			t, e := ochazuke.ThingOf(q)
+			if e == nil {
+				t[archiveProp] = a.store.states()[q.State].Archive
+			}
+			return t, e
 		},
 	})
-	for _, key := range []string{"lane.get", "lane.set"} {
-		op := a.r.Operations[key]
-		op.Agent = ochazuke.AgentAllow
-		a.r.Operations[key] = op
+	for _, key := range []string{"lane.get", "lane.set", "lane.restore"} {
+		if op, ok := a.r.Operations[key]; ok {
+			op.Agent = ochazuke.AgentAllow
+			a.r.Operations[key] = op
+		}
 	}
 }
 
@@ -118,4 +155,20 @@ func openConditions(states []State) []ochazuke.PropFilter {
 		}
 	}
 	return out
+}
+
+// archiveFlag reads the archive prop's value from a typed or text write.
+func archiveFlag(v any) (bool, error) {
+	switch x := v.(type) {
+	case bool:
+		return x, nil
+	case string:
+		switch strings.ToLower(strings.TrimSpace(x)) {
+		case "true", "yes", "1", "on":
+			return true, nil
+		case "false", "no", "0", "off", "":
+			return false, nil
+		}
+	}
+	return false, fmt.Errorf("%s: expected true or false", archiveProp)
 }

@@ -20,6 +20,10 @@ type State struct {
 	Starts bool   `json:"starts"`
 	Ends   bool   `json:"ends"`
 	Open   bool   `json:"open"`
+	// Archive marks the state that carries ochazuke's archive role: lanes in
+	// it are hidden from the default views (list.hide-archived), do not hold
+	// their parent's rolled state, and are what the archived prop reports.
+	Archive bool `json:"archive,omitempty"`
 	// Description says in plain words what the state means. The Lanes page
 	// shows it under the focused lane; an empty description shows nothing.
 	Description string `json:"description,omitempty"`
@@ -131,7 +135,7 @@ func (s *Store) view(q Lane, rows []Lane) View {
 	}
 	for _, e := range activeHistory(q.History) {
 		st, ok := s.states()[e.To]
-		if !ok || (e.Kind != "state" && e.Kind != "create") {
+		if !ok || st.Archive || (e.Kind != "state" && e.Kind != "create") {
 			continue
 		}
 		at := e.At
@@ -149,7 +153,7 @@ func (s *Store) view(q Lane, rows []Lane) View {
 	if q.Parent == "" {
 		present := map[string]bool{}
 		for _, c := range rows {
-			if c.ID != q.ID && descendant(rows, c.ID, q.ID) {
+			if c.ID != q.ID && !s.states()[c.State].Archive && descendant(rows, c.ID, q.ID) {
 				present[c.State] = true
 			}
 		}

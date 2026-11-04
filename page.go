@@ -109,13 +109,14 @@ type pageOptions struct {
 	staleFlag                                                          bool
 	groupProjects, projectColumn, nameTone, stateAbout                 bool
 	project                                                            string
+	hideArchived                                                       bool
 	states                                                             []string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter")}
+	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived")}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -240,6 +241,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	}
 	out := []ocli.Row{}
 	kept := stateKept(lanes, o.states)
+	hidden := s.archiveHidden(lanes, o.states, o.hideArchived)
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -249,7 +251,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			if o.project != "" && !subtreeProject(lanes, q, o.project) {
 				continue
 			}
-			if kept != nil && !kept[q.ID] {
+			if (kept != nil && !kept[q.ID]) || hidden[q.ID] {
 				continue
 			}
 			v := s.view(q, lanes)
@@ -379,7 +381,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				data["live_state"] = live.State
 			}
 			data["stale"], data["stale_reason"] = stale, staleReason
-			laneFilterValues(data, q)
+			laneFilterValues(data, q, s.states()[q.State].Archive)
 			if about := stateAbout(q.State, v.StateDescription, v.StateReason); o.stateAbout && about != "" {
 				data["state_about"] = about
 			}

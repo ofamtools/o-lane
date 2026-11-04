@@ -13,11 +13,12 @@ const defaultStates = `[{"name":"planned","tone":"dim","open":true},` +
 	`{"name":"review","tone":"accent","open":true,"description":"The work is finished and waits for review before it merges."},` +
 	`{"name":"merged","tone":"state.done","ends":true,"description":"The work is merged into main; it may still need a release or an install."},` +
 	`{"name":"done","tone":"state.done","ends":true,"description":"Finished: shipped, delivered or answered."},` +
-	`{"name":"cancelled","tone":"dim","ends":true,"description":"Stopped without finishing; kept for the record."}]`
+	`{"name":"cancelled","tone":"dim","ends":true,"description":"Stopped without finishing; kept for the record."},` +
+	`{"name":"archived","tone":"dim","archive":true,"description":"Put away: kept with its history but hidden from the default views. Restore returns it to the state it had."}]`
 
 const defaultLiveStates = `{"working":{"working":true,"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"working":true,"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
 
-const defaultStatePresets = `{"start":"running","park":"parked","review":"review","merge":"merged","finish":"done","cancel":"cancelled","reopen":"planned"}`
+const defaultStatePresets = `{"start":"running","park":"parked","review":"review","merge":"merged","finish":"done","cancel":"cancelled","reopen":"planned","archive":"archived"}`
 
 func appSettings() []ochazuke.Setting {
 	rows := []ochazuke.Setting{
@@ -34,7 +35,7 @@ func appSettings() []ochazuke.Setting {
 			}
 			_, e := parseStates(text)
 			return e
-		}, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open, description (shown under the focused lane; empty shows nothing)"},
+		}, Default: defaultStates, Description: "JSON lifecycle rows: name, tone, starts, ends, open, archive (the state that carries the archive role), description (shown under the focused lane; empty shows nothing)"},
 		{Name: "lanes.pane-roles", Type: ochazuke.SettingList, Default: []string{"implementer", "reviewer", "watcher", "coordinator"}, Description: "Pane roles"},
 		{Name: "lanes.tag-states", Type: ochazuke.SettingString, Default: `{"LANE-DONE":"review"}`, Description: "JSON tag to lifecycle state map; unmapped tags append notes"},
 		{Name: "lanes.plans-dir", Type: ochazuke.SettingString, Default: "", Description: "Optional plan directory; unset by default"},

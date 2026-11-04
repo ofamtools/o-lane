@@ -290,6 +290,87 @@ func (s *Store) state(q *Lane, state, note string) error {
 	s.entry(q, "state", old, state, note, nil, nil)
 	return nil
 }
+
+// archiveState is the first lanes.states row with the archive role.
+func (s *Store) archiveState() (State, bool) {
+	for _, st := range s.stateRows() {
+		if st.Archive {
+			return st, true
+		}
+	}
+	return State{}, false
+}
+
+// restoreState is where a restored lane returns: the state it had before the
+// latest effective move into its current archive state, else the first
+// configured state that is neither closed nor archived, else the first row.
+func (s *Store) restoreState(q *Lane) string {
+	states := s.states()
+	history := activeHistory(q.History)
+	for i := len(history) - 1; i >= 0; i-- {
+		e := history[i]
+		if e.Kind != "state" || e.To != q.State {
+			continue
+		}
+		if from, ok := states[e.From]; ok && !from.Archive {
+			return e.From
+		}
+	}
+	for _, st := range s.stateRows() {
+		if st.Open && !st.Archive {
+			return st.Name
+		}
+	}
+	return s.stateRows()[0].Name
+}
+
+// setArchived writes the archive role: on moves the lane to the archive
+// state, off returns it to the state it had. Either is a no-op when the lane
+// is already there.
+func (s *Store) setArchived(q *Lane, on bool, note string) error {
+	if s.states()[q.State].Archive == on {
+		return nil
+	}
+	archive, ok := s.archiveState()
+	if !ok {
+		return errors.New("no lanes.states row has archive:true; add one (for example name archived) to archive lanes")
+	}
+	if on {
+		return s.state(q, archive.Name, note)
+	}
+	return s.state(q, s.restoreState(q), note)
+}
+
+// archiveHidden is the lanes the default views leave out: lanes in an archive
+// state and everything below them. nil when hiding is off or the caller named
+// an archive state, which asks for archived lanes.
+func (s *Store) archiveHidden(rows []Lane, named []string, enabled bool) map[string]bool {
+	if !enabled {
+		return nil
+	}
+	states := s.states()
+	for _, name := range named {
+		if states[name].Archive {
+			return nil
+		}
+	}
+	parent, state := map[string]string{}, map[string]string{}
+	for _, q := range rows {
+		parent[q.ID], state[q.ID] = q.Parent, q.State
+	}
+	hidden := map[string]bool{}
+	for _, q := range rows {
+		seen := map[string]bool{}
+		for id := q.ID; id != "" && !seen[id]; id = parent[id] {
+			seen[id] = true
+			if states[state[id]].Archive {
+				hidden[q.ID] = true
+				break
+			}
+		}
+	}
+	return hidden
+}
 func (s *Store) State(target, state, note string) (Lane, error) {
 	return s.mutate("state", target, func(q *Lane, _ *[]Lane) error { return s.state(q, state, note) })
 }
