@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
 	"ofam.dev/ochazuke"
 )
 
@@ -59,9 +61,12 @@ func cliActor(env func(string) string) (Actor, error) {
 		a.Kind = "agent"
 	}
 	if env("OCHAZUKE_ACTOR") != "" {
-		explicit, e := ochazuke.ActorFromEnv(env)
+		// ParseActor, not ActorFromEnv: the framework's own environment
+		// detection names a Pi session "pi", and this file's table owns the
+		// harness name (omp).
+		explicit, e := ochazuke.ParseActor(strings.TrimSpace(env("OCHAZUKE_ACTOR")))
 		if e != nil {
-			return Actor{}, e
+			return Actor{}, fmt.Errorf("OCHAZUKE_ACTOR: %w", e)
 		}
 		if detected {
 			explicit.Kind = "agent"

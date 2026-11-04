@@ -3,6 +3,9 @@
   "app": "o-lane",
   "width": 160,
   "height": 42,
+  "values": {
+    "list.filter-layout": "fields"
+  },
   "seed": {
     "lanes": [
       {
