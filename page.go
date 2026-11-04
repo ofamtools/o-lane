@@ -73,6 +73,7 @@ func (a *App) registerPage() error {
 		if e := a.store.checkStates(o.states); e != nil {
 			return done(nil, e)
 		}
+		o.listHides, _ = c.Args["archived"].(bool)
 		reader, run := a.reader, commandRunner(a.run)
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
 			if a.rowsLoaded != nil {
@@ -82,7 +83,7 @@ func (a *App) registerPage() error {
 		})
 	}, "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	rowsOp := a.r.Operations["lane.rows"]
-	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter")}
+	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter"), "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a state names an archive state"}}
 	a.r.Operations[rowsOp.Key()] = rowsOp
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
@@ -110,13 +111,18 @@ type pageOptions struct {
 	groupProjects, projectColumn, nameTone, stateAbout                 bool
 	project                                                            string
 	hideArchived                                                       bool
-	states                                                             []string
+	// listHides leaves archived lanes to the list: the rows carry the archived
+	// prop and list.hide-archived and the archived filter decide what shows.
+	// False is the portable feed (lane rows from the CLI or MCP), which drops
+	// them itself unless the caller names an archive state.
+	listHides bool
+	states    []string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived")}
+	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived"), listHides: true}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -241,7 +247,13 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	}
 	out := []ocli.Row{}
 	kept := stateKept(lanes, o.states)
-	hidden := s.archiveHidden(lanes, o.states, o.hideArchived)
+	var hidden map[string]bool
+	if !o.listHides {
+		hidden = s.archiveHidden(lanes, o.states, o.hideArchived)
+	}
+	// A state filter naming an archive state asks for those lanes: the rows
+	// then do not flag them, so the list's own archive hiding leaves them be.
+	asked := slices.ContainsFunc(o.states, func(name string) bool { return s.states()[name].Archive })
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -255,7 +267,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				continue
 			}
 			v := s.view(q, lanes)
-			if parent == "" && o.hideClosed && !s.states()[v.RolledState].Open {
+			if parent == "" && o.hideClosed && !s.states()[q.State].Archive && !s.states()[v.RolledState].Open {
 				continue
 			}
 			state := v.RolledState
@@ -381,7 +393,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				data["live_state"] = live.State
 			}
 			data["stale"], data["stale_reason"] = stale, staleReason
-			laneFilterValues(data, q, s.states()[q.State].Archive)
+			laneFilterValues(data, q, s.states()[q.State].Archive && !asked)
 			if about := stateAbout(q.State, v.StateDescription, v.StateReason); o.stateAbout && about != "" {
 				data["state_about"] = about
 			}
