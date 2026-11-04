@@ -38,6 +38,7 @@ type verbSpec struct {
 	params                  map[string]ochazuke.Parameter
 	positional              []string
 	read                    bool
+	agent                   string
 }
 
 func param(desc string) ochazuke.Parameter {
@@ -73,16 +74,13 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		if v.name == "set" {
 			continue
 		}
-		right := ochazuke.AgentAllow
-		if never[v.name] {
-			right = ochazuke.AgentNever
+		right := v.agent
+		if right == "" {
+			right = ochazuke.AgentAllow
 		}
 		b := a.r.DefineOwn(v.noun).Verb(v.name, func(c ochazuke.Ctx) ochazuke.Result { return a.handle(v.noun, v.name, c) }, v.description).Agent(right)
 		if v.read {
 			b.Fetch()
-		}
-		if v.name == "delete" {
-			b.Destructive()
 		}
 		if len(v.positional) > 0 {
 			b.Positional(v.positional...)
@@ -162,34 +160,34 @@ func (a *App) specs() []verbSpec {
 	fields["project"] = projectParam(projectHelp)
 	projectFilter := param("Only lanes whose effective project matches this reference")
 	rows := []verbSpec{
-		{"lane", "add", "Create one lane; no parent creates a root", fields, []string{"name"}, false},
-		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false},
-		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false},
-		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true},
-		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "stale": {Type: "boolean", Description: "Only working lifecycle states with no working participant (requires live reads)"}, "project": projectFilter, "state": stateParam("")}, nil, true},
-		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project"), "state": stateParam("ancestors of matches stay as context")}, nil, true},
-		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true},
-		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true},
-		{"lane", "set", "Set one spec property", common(map[string]ochazuke.Parameter{"prop": required("Property"), "value": required("New value; JSON array for depends")}), []string{"target", "prop", "value"}, false},
-		{"lane", "rename", "Change lane name", common(map[string]ochazuke.Parameter{"name": required("New name")}), []string{"target", "name"}, false},
-		{"lane", "reword", "Change the owner's wording, retaining undo", common(map[string]ochazuke.Parameter{"text": required("Verbatim wording")}), []string{"target", "text"}, false},
-		{"lane", "move", "Change parent; refuses cycles", common(map[string]ochazuke.Parameter{"parent": param("New parent; empty makes root")}), []string{"target", "parent"}, false},
-		{"lane", "copy", "Copy spec into a planned retry linked to the original", common(map[string]ochazuke.Parameter{"name": param("New name")}), []string{"target", "name"}, false},
-		{"lane", "start", "Start a lane, optionally recording a pane or pane-less agent", common(map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "agent-id": param("Harness sub-agent ID (live state from lanes.agent-harnesses)"), "agent-session": param("Harness session the agent runs in"), "branch": param("Branch"), "worktree": param("Worktree path")}), []string{"target"}, false},
-		{"lane", "state", "Record any configured state; from-tag uses lanes.tag-states", common(map[string]ochazuke.Parameter{"state": param("Lifecycle state"), "note": param("History note"), "from-tag": param("Watcher tag; unmapped tags append notes")}), []string{"target", "state"}, false},
-		{"lane", "note", "Append a history note", common(map[string]ochazuke.Parameter{"text": required("Note")}), []string{"target", "text"}, false},
-		{"lane", "live", "Read each pane and the aggregate live state of the lane subtree", common(nil), []string{"target"}, true},
-		{"lane", "focus-pane", "Focus an associated pane using the configured argv", common(map[string]ochazuke.Parameter{"role": param("Optional role filter")}), []string{"target"}, true},
-		{"lane", "yank-id", "Copy the lane ID to the framework register", common(nil), []string{"target"}, true},
-		{"lane", "yank-path", "Copy the worktree path to the framework register", common(nil), []string{"target"}, true},
-		{"lane", "delete", "Hide a lane and subtree; undo restores them", common(nil), []string{"target"}, false},
-		{"lane", "undo", "Restore the latest change; agents can undo their own latest change", nil, nil, false},
+		{"lane", "add", "Create one lane; no parent creates a root", fields, []string{"name"}, false, ""},
+		{"lane", "define", "Atomically define JSON specs or a plan Lanes table; exact parent/name updates", defineParams(), nil, false, ""},
+		{"plan", "define", "Define a plan root and its lanes; same handler as lane.define --plan", planDefineParams(), []string{"plan"}, false, ""},
+		{"plan", "lanes", "List recorded lanes linked to an exact plan path", map[string]ochazuke.Parameter{"plan": required("Plan path or exact filename in lanes.plans-dir")}, []string{"plan"}, true, ""},
+		{"lane", "list", "List recorded lanes", map[string]ochazuke.Parameter{"parent": param("Filter by parent"), "deleted": {Type: "boolean", Description: "Include deleted lanes and their audit history"}, "stale": {Type: "boolean", Description: "Only working lifecycle states with no working participant (requires live reads)"}, "project": projectFilter, "state": stateParam("")}, nil, true, ""},
+		{"lane", "tree", "List lanes in parent-first order", map[string]ochazuke.Parameter{"open": {Type: "boolean", Description: "Hide closed roots"}, "project": param("Only subtrees containing lanes of this project"), "state": stateParam("ancestors of matches stay as context")}, nil, true, ""},
+		{"lane", "show", "Show a lane and derived lifecycle timestamps", common(nil), []string{"target"}, true, ""},
+		{"lane", "history", "Show a lane's actor-attributed history", common(nil), []string{"target"}, true, ""},
+		{"lane", "set", "Set one spec property", common(map[string]ochazuke.Parameter{"prop": required("Property"), "value": required("New value; JSON array for depends")}), []string{"target", "prop", "value"}, false, ""},
+		{"lane", "rename", "Change lane name", common(map[string]ochazuke.Parameter{"name": required("New name")}), []string{"target", "name"}, false, ""},
+		{"lane", "reword", "Change the owner's wording, retaining undo", common(map[string]ochazuke.Parameter{"text": required("Verbatim wording")}), []string{"target", "text"}, false, ""},
+		{"lane", "move", "Change parent; refuses cycles", common(map[string]ochazuke.Parameter{"parent": param("New parent; empty makes root")}), []string{"target", "parent"}, false, ""},
+		{"lane", "copy", "Copy spec into a planned retry linked to the original", common(map[string]ochazuke.Parameter{"name": param("New name")}), []string{"target", "name"}, false, ""},
+		{"lane", "start", "Start a lane, optionally recording a pane or pane-less agent", common(map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Pane host"), "session": param("Pane session"), "role": param("Participant role"), "harness": param("Harness"), "model": param("Model"), "agent": param("Agent kind"), "agent-id": param("Harness sub-agent ID (live state from lanes.agent-harnesses)"), "agent-session": param("Harness session the agent runs in"), "branch": param("Branch"), "worktree": param("Worktree path")}), []string{"target"}, false, ""},
+		{"lane", "state", "Record any configured state; from-tag uses lanes.tag-states", common(map[string]ochazuke.Parameter{"state": param("Lifecycle state"), "note": param("History note"), "from-tag": param("Watcher tag; unmapped tags append notes")}), []string{"target", "state"}, false, ""},
+		{"lane", "note", "Append a history note", common(map[string]ochazuke.Parameter{"text": required("Note")}), []string{"target", "text"}, false, ""},
+		{"lane", "live", "Read each pane and the aggregate live state of the lane subtree", common(nil), []string{"target"}, true, ""},
+		{"lane", "focus-pane", "Focus an associated pane using the configured argv", common(map[string]ochazuke.Parameter{"role": param("Optional role filter")}), []string{"target"}, true, ""},
+		{"lane", "yank-id", "Copy the lane ID to the framework register", common(nil), []string{"target"}, true, ""},
+		{"lane", "yank-path", "Copy the worktree path to the framework register", common(nil), []string{"target"}, true, ""},
+		{"lane", "delete", "Hide a lane and subtree; undo restores them", common(nil), []string{"target"}, false, ochazuke.AgentNever},
+		{"lane", "undo", "Restore the latest change; agents can undo their own latest change", nil, nil, false, ""},
 	}
 	for _, v := range []struct{ name, desc string }{{"park", "Park"}, {"review", "Request review"}, {"merge", "Record merge and optional commit"}, {"finish", "Mark done"}, {"cancel", "Cancel"}, {"reopen", "Reopen as planned"}} {
-		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}), []string{"target"}, false})
+		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}), []string{"target"}, false, ""})
 	}
 	for _, verb := range []string{"link", "unlink"} {
-		rows = append(rows, verbSpec{"lane", verb, "Add or remove a typed link", common(map[string]ochazuke.Parameter{"kind": required("Link kind"), "link": required("Link target"), "label": param("Label")}), []string{"target", "kind", "link"}, false})
+		rows = append(rows, verbSpec{"lane", verb, "Add or remove a typed link", common(map[string]ochazuke.Parameter{"kind": required("Link kind"), "link": required("Link target"), "label": param("Label")}), []string{"target", "kind", "link"}, false, ""})
 	}
 	for _, noun := range []string{"lane", "pane", "agent", "project"} {
 		for _, verb := range []string{"associate", "unassociate"} {
@@ -210,16 +208,16 @@ func (a *App) specs() []verbSpec {
 				pos = []string{"project", "lane"}
 				desc = "Associate or unassociate a project and lane; same handler as lane." + verb + " --project"
 			}
-			rows = append(rows, verbSpec{noun, verb, desc, m, pos, false})
+			rows = append(rows, verbSpec{noun, verb, desc, m, pos, false, ""})
 		}
 	}
-	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "state": stateParam("")}, []string{"project"}, true})
-	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true})
-	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true})
+	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "state": stateParam("")}, []string{"project"}, true, ""})
+	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true, ""})
+	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true, ""})
 	agentRef := map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any")}
-	rows = append(rows, verbSpec{"agent", "lanes", "List lanes associated with an agent", agentRef, []string{"agent-id"}, true})
-	rows = append(rows, verbSpec{"agent", "live", "Read an agent's live state (working, idle, done, missing) from lanes.agent-harnesses data", map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any"), "agent-session": param("Harness session the agent runs in")}, []string{"agent-id"}, true})
-	rows = append(rows, verbSpec{"agent", "list", "List agents recorded by agent-hook, newest first, with live state", nil, nil, true})
+	rows = append(rows, verbSpec{"agent", "lanes", "List lanes associated with an agent", agentRef, []string{"agent-id"}, true, ""})
+	rows = append(rows, verbSpec{"agent", "live", "Read an agent's live state (working, idle, done, missing) from lanes.agent-harnesses data", map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any"), "agent-session": param("Harness session the agent runs in")}, []string{"agent-id"}, true, ""})
+	rows = append(rows, verbSpec{"agent", "list", "List agents recorded by agent-hook, newest first, with live state", nil, nil, true, ""})
 	return rows
 }
 func done(v any, e error) ochazuke.Result {

@@ -213,10 +213,15 @@ func TestStoreAgentUndo(t *testing.T) {
 	if e := s.Undo(); e == nil || !strings.Contains(e.Error(), "history.own-entry") {
 		t.Fatalf("undo crossed owner: %v", e)
 	}
-	for _, action := range []string{"delete", "reword"} {
-		if e := s.permit(action); e == nil {
-			t.Fatal(action)
-		}
+	if e := s.permit("delete"); e == nil {
+		t.Fatal("agent delete succeeded")
+	}
+	if _, e := s.Reword(q.ID, "agent wording"); e != nil {
+		t.Fatal(e)
+	}
+	q = mustResolve(t, s, q.ID)
+	if q.Wording != "agent wording" || q.History[len(q.History)-1].By != s.Actor {
+		t.Fatal(q)
 	}
 }
 func TestStoreBackups(t *testing.T) {

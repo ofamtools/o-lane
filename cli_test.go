@@ -186,32 +186,26 @@ func TestCLIRightsAndActors(t *testing.T) {
 	f.lane("add", "owner")
 	actor := Actor{Kind: "agent", Name: "implementer", Harness: "test", Pane: "w", Session: "s", Model: "test-model"}
 	f.a.actor = actor
-	for _, v := range f.a.specs() {
-		op := f.a.r.Operations[v.noun+"."+v.name]
-		right := f.a.r.AgentRight(op, false)
-		want := ochazuke.AgentAllow
-		if never[v.name] {
-			want = ochazuke.AgentNever
-		}
-		if right.Right != want {
-			t.Fatalf("%s: %v", op.Key(), right)
-		}
-	}
 	f.lane("note", "owner", "agent note")
+	f.lane("reword", "owner", "agent-amended wording")
 	q := mustResolve(t, f.a.store, "owner")
 	if q.History[len(q.History)-1].By != actor {
 		t.Fatal(q.History)
 	}
+	if q.Wording != "agent-amended wording" {
+		t.Fatal(q)
+	}
 	f.fail("verb declaration", "lane", "delete", "owner")
-	f.fail("verb declaration", "lane", "reword", "owner", "replacement")
 	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.note","right":"never"}]`); e != nil {
 		t.Fatal(e)
 	}
 	f.fail("agents.rights[0]", "lane", "note", "owner", "blocked")
-	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.reword","right":"allow"}]`); e != nil {
+	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.delete","right":"allow"}]`); e != nil {
 		t.Fatal(e)
 	}
-	f.lane("reword", "owner", "owner-approved override")
+	if deleted := f.lane("delete", "owner"); deleted["deleted"] != true {
+		t.Fatal(deleted)
+	}
 }
 func TestCLIActorEnv(t *testing.T) {
 	for _, tc := range []struct {
@@ -258,5 +252,32 @@ func TestCLIDataAndConfig(t *testing.T) {
 	}
 	if _, _, e = globalData([]string{"--data"}); e == nil {
 		t.Fatal("missing dir accepted")
+	}
+}
+
+func TestLaneRightsCatalog(t *testing.T) {
+	f := newCLI(t)
+	doc := f.call("catalog").(map[string]any)
+	wants := map[string]string{"delete": ochazuke.AgentNever, "reword": ochazuke.AgentAllow}
+	for _, row := range doc["nouns"].([]any) {
+		noun := row.(map[string]any)
+		if noun["name"] != "lane" {
+			continue
+		}
+		for _, row := range noun["verbs"].([]any) {
+			verb := row.(map[string]any)
+			name := verb["name"].(string)
+			want, ok := wants[name]
+			if !ok {
+				continue
+			}
+			if verb["agent"] != want || verb["destructive"] != false {
+				t.Fatal(verb)
+			}
+			delete(wants, name)
+		}
+	}
+	if len(wants) != 0 {
+		t.Fatal("missing catalog rows", wants)
 	}
 }

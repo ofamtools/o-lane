@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Open agent lane writes, including reword, through the catalog declarations and owner overrides. Remove the store's never map and reserved import/export restrictions. Keep the soft-delete `lane.delete` declared agent-never without a Destructive mark; archive remains separate P3 work. CLI/MCP coverage checks persisted reword attribution and delete refusal.
+
 - Upgrade ochazuke to v0.83.0 and monogatari to v0.4.1. Lane detail modals use the framework's shared close, edge and window-sized paging motions; update the status-filter journey for the live filter form.
 
 - Avoid false stale flags on working lanes when any working descendant has an active participant, including tuios `needs_input` approval/question/auth waits. Reuse the single `lanes.live-states` activity mapping, independent of role filters. Resolve unique pane ID prefixes to full IDs when associating (including `start` and the pane-side verb), retaining the supplied ID on failed or ambiguous lookup; live snapshots and subscription updates also match existing stored prefixes within their host/session.

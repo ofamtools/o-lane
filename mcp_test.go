@@ -39,7 +39,7 @@ func TestMCPStdioSmoke(t *testing.T) {
 	run(7, "lane.state", "worker", map[string]any{"state": "review"}, false)
 	run(8, "lane.associate", "worker", map[string]any{"pane": "not-a-real-window", "session": "test-session", "role": "reviewer"}, false)
 	run(9, "lane.delete", "worker", map[string]any{}, false)
-	run(10, "lane.reword", "task", map[string]any{"text": "must refuse"}, false)
+	run(10, "lane.reword", "task", map[string]any{"text": "amended words"}, false)
 	run(11, "lane.add", "", map[string]any{"name": "dry-only"}, true)
 	run(12, "lane.show", "task", map[string]any{}, false)
 	run(13, "lane.import", "", map[string]any{}, false)
@@ -79,12 +79,12 @@ func TestMCPStdioSmoke(t *testing.T) {
 		}
 		return v
 	}
-	for _, id := range []int{5, 6, 7, 8, 11, 12} {
+	for _, id := range []int{5, 6, 7, 8, 10, 11, 12} {
 		if got := structured(id)["status"]; got != "done" {
 			t.Fatalf("call %d: %v", id, structured(id))
 		}
 	}
-	for _, id := range []int{9, 10} {
+	for _, id := range []int{9} {
 		v := structured(id)
 		if v["status"] != "refused" || !strings.Contains(v["reason"].(string), "verb declaration") {
 			t.Fatalf("refusal %d: %v", id, v)
@@ -113,7 +113,7 @@ func TestMCPStdioSmoke(t *testing.T) {
 			}
 		}
 	}
-	if q := mustResolve(t, s, "task"); q.Wording != "owner words" {
+	if q := mustResolve(t, s, "task"); q.Wording != "amended words" {
 		t.Fatal(q)
 	}
 }

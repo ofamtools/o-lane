@@ -98,7 +98,7 @@ func cliActor(env func(string) string) (Actor, error) {
 	return a, nil
 }
 
-var never = map[string]bool{"delete": true, "reword": true, "import": true}
+var defaultLaneVerbs = (&App{}).specs()
 
 func (s *Store) permit(action string) error {
 	if s.Actor.Kind == "" || s.Actor.Kind == "owner" {
@@ -110,11 +110,10 @@ func (s *Store) permit(action string) error {
 	if s.Permit != nil {
 		return s.Permit(action)
 	}
-	if never[action] {
-		return &ochazuke.RefusedError{Verb: "lane." + action, Rule: "verb declaration", Reason: "agents may never run this verb; ask the owner"}
-	}
-	if action == "export" {
-		return fmt.Errorf("lane.export: needs owner confirmation (verb declaration)")
+	for _, v := range defaultLaneVerbs {
+		if v.noun == "lane" && v.name == action && v.agent == ochazuke.AgentNever {
+			return &ochazuke.RefusedError{Verb: "lane." + action, Rule: "verb declaration", Reason: "agents may never run this verb; ask the owner"}
+		}
 	}
 	return nil
 }
