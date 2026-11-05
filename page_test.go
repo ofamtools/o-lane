@@ -374,6 +374,34 @@ func TestPageFocusAndYank(t *testing.T) {
 		}
 	}
 }
+
+// A lane verb's target is declared as the focused row (Parameter.From), so
+// the help's run of the verb, with no binding from, reaches the focused lane.
+func TestPageTargetComesFromTheRow(t *testing.T) {
+	a := pageFixture(t)
+	seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Implementation"}]}`))
+	if e := a.r.Settings().Set("lanes.live", false); e != nil {
+		t.Fatal(e)
+	}
+	p, e := mountPage(a)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p.m.Width, p.m.Height = 140, 38
+	p.m.View()
+	for _, key := range []string{"lane.show", "lane.note", "lane.yank-id", "lane.choose-state", "lane.choose-pane", "lane.focus-pane"} {
+		if got := a.r.Operations[key].Parameters["target"].From; got != "row:id" {
+			t.Errorf("%s target From %q", key, got)
+		}
+	}
+	if e = a.r.RunUnbound(a.r.BaseFocus(), ochazuke.Request{Noun: "lane", Verb: "yank-id"}); e != nil {
+		t.Fatal(e)
+	}
+	q, _ := a.store.Resolve("Implementation")
+	if got := a.r.Registers().Named["\""].Yank.Text; got != q.ID {
+		t.Fatalf("yank %q want %q", got, q.ID)
+	}
+}
 func TestPageDetailSharedMotions(t *testing.T) {
 	for _, height := range []int{26, 38} {
 		t.Run(fmt.Sprint(height), func(t *testing.T) {

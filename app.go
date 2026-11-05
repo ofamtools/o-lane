@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"slices"
@@ -88,6 +89,12 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		}
 		op := a.r.Operations[v.noun+"."+v.name]
 		op.Parameters = v.params
+		if t, ok := op.Parameters["target"]; ok && v.noun == "lane" {
+			// A lane verb's target is the focused lane row when a key, the help or the palette runs it.
+			t.From = ochazuke.SourceRow + ":id"
+			op.Parameters = maps.Clone(op.Parameters)
+			op.Parameters["target"] = t
+		}
 		if !v.read {
 			op.HistoryKind = ochazuke.HistoryChange
 		}

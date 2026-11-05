@@ -21,6 +21,7 @@ func (a *App) registerPage() error {
 	target := param("Lane ID, unique prefix or name")
 	target.Focus = true
 	target.Noun = "lane"
+	target.From = ochazuke.SourceRow + ":id"
 	for _, v := range []struct{ name, field, source, desc string }{
 		{"choose-state", "state", "lane.states", "Choose and record a lifecycle state"},
 		{"choose-pane", "pane", "pane.choices", "Choose a tuios window to associate"},
@@ -99,7 +100,7 @@ func (a *App) registerPage() error {
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
 	for _, row := range []struct{ key, verb string }{{"enter", "show"}, {"s", "choose-state"}, {"g p", "focus-pane"}, {"a", "choose-pane"}, {"n", "note"}, {"y", "yank-id"}} {
-		b.Bind(row.key, ochazuke.Do("lane."+row.verb).FromPayload("target", "row"))
+		b.Bind(row.key, ochazuke.Do("lane."+row.verb))
 	}
 	detail := a.r.Define("lane-detail").Pin("normal").Mode("normal")
 	for _, row := range []struct {
