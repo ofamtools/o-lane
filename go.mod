@@ -8,7 +8,7 @@ require (
 	github.com/yuin/goldmark v1.7.8
 	golang.org/x/sys v0.47.0
 	ofam.dev/monogatari v0.4.1
-	ofam.dev/ochazuke v0.89.0
+	ofam.dev/ochazuke v0.90.0
 	ofam.dev/oden v0.2.0
 )
 
