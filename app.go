@@ -101,7 +101,11 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	return a, nil
 }
 func (a *App) shell() *ocli.Shell {
-	sh := ocli.New(a.r, "o-lane", a.in, a.out, a.errOut)
+	sh := ocli.New(a.r, "o-lane", a.in, a.out, a.errOut, ocli.PeerBindings(ochazuke.Binding{
+		Mode: "normal", Noun: "lane.lane", Keys: "g s", Hint: "send the lane's doc notes to its pane",
+		Request: ochazuke.Request{Noun: "md.doc", Verb: "send-notes"},
+		From:    map[string]string{"target": "row:doc", "pane": "row:pane"},
+	}))
 	sh.Version = version
 	sh.Actor = &a.actor
 	sh.Prepare = func(context.Context) error { return a.configure() }

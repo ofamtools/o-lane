@@ -125,6 +125,12 @@ The detail uses ochazuke's fields, Markdown and thread sections: owner wording, 
 
 State descriptions. The detail pane under the list opens with what the focused lane's state means: the state name, the `description` from its `lanes.states` row, and the reason it is there (`Note: …`). The reason is the latest state change's own note (`lane state --note`, `lane park --note`), or else the latest `lane note` written between the previous state change and that one. A state whose row has no description shows nothing, which is how `planned` stays quiet by default; every other default state has one. A customised `lanes.states` without `description` fields shows no descriptions until you add them (rows are not merged with the defaults). `lane show` and `lane rows` carry the same text as `state_description` and `state_reason`. The panes' live status reads `agent <state>` in the pane lines and `agent status` in the fields, so it is not mistaken for the lane's state.
 
+With o-md registered in the host, `g s` sends the focused lane's doc notes to its pane through `md.doc.send-notes`. Both `lane rows` and the page's no-argument `lane page-rows` source include `data.doc` and `data.pane`. `doc` is the newest linked target whose kind occurs in `lanes.doc-link-kinds` (default `doc,report`); link kinds do not have priority over recency. `pane` is the first current associated pane marked working by `lanes.live-states`, including needs-input by default. No working pane leaves it empty so mtm asks for one. No doc leaves the target empty and o-md reports `name a doc: --target PATH`. Without o-md, the host omits this key and reports a warning in `bindings check`; standalone o-lane never loads the peer row. Unbind the row in the host, or set its `extensions.peer-keys` to `off`, to disable peer keys.
+
+Ochazuke v0.88.0 also supplies `lane edit`. On a mounted lane row, `i` opens the lane's writable-property form; field changes write through the lane store as they happen, and undo remains available. It does not attach to the associated agent pane.
+
+Mounted project completion and `project list` use `OCHAZUKE_HOST` through `cli.Host`, retaining the host's complete argv, including its temporary `--data`. With no host declaration, `lanes.project-source=mtm` retains the existing optional PATH lookup. Malformed host argv is reported as a source error, never used as a reason to fall back to another database.
+
 Page settings and defaults:
 
 | Setting | Default | Effect when disabled |
@@ -148,6 +154,7 @@ Page settings and defaults:
 | `lanes.project-column` | true | Hide the project column |
 | `lanes.project-filter` | "" | Empty shows every project; a reference shows only subtrees containing lanes of that project |
 | `lanes.state-filter` | [] (all) | Empty shows every state; a list of lifecycle states shows matching lanes with their ancestors as context |
+| `lanes.doc-link-kinds` | `doc,report` | Empty disables doc selection; otherwise the newest matching link supplies the peer key's target |
 
 ### Filtering
 

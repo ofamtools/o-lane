@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"ofam.dev/ochazuke"
+	ocli "ofam.dev/ochazuke/cli"
 )
 
 // A project is a reference only: an id or name with an optional host kind
@@ -129,8 +130,8 @@ func projectSourceDefault() string {
 	return "none"
 }
 
-// sourceProjects asks the configured host for its projects through the
-// injectable runner. Only completion and project.list use it.
+// sourceProjects asks the configured host for its projects. Mounted calls use
+// the host's complete argv; standalone calls retain the injectable PATH runner.
 func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
 	switch source := a.r.Settings().String("lanes.project-source"); source {
 	case "", "none":
@@ -138,7 +139,16 @@ func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
 	case "mtm":
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		b, e := a.run(ctx, []string{"mtm", "project", "list"})
+		host, hosted, e := ocli.HostFromEnv()
+		if e != nil {
+			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
+		}
+		var b []byte
+		if hosted {
+			b, e = host.Run(ctx, "project.list", nil)
+		} else {
+			b, e = a.run(ctx, []string{"mtm", "project", "list"})
+		}
 		if e != nil {
 			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
 		}

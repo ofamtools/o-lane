@@ -131,14 +131,15 @@ type pageOptions struct {
 	// prop and list.hide-archived and the archived filter decide what shows.
 	// False is the portable feed (lane rows from the CLI or MCP), which drops
 	// them itself unless the caller names an archive state.
-	listHides bool
-	states    []string
+	listHides    bool
+	states       []string
+	docLinkKinds []string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived"), listHides: true}
+	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived"), listHides: true}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
@@ -324,6 +325,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				cells = append(cells, duration)
 			}
 			paneLabels, agents, paneDetail := []string{}, []string{}, []string{}
+			pane := ""
 			roles := map[string]int{}
 			for _, p := range q.Panes {
 				if holder := paneHolder(lanes, q.ID, p); !s.PanesShared && holder != "" {
@@ -354,6 +356,9 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				if hasLive && o.live.on {
 					for _, lp := range live.Panes {
 						if lp.Pane == p {
+							if pane == "" && p.Window != "" && lp.working {
+								pane = p.Window
+							}
 							liveText = " · agent " + lp.State
 							if lp.AgentLive != nil {
 								// An agent's own state and last-activity age sit
@@ -404,6 +409,14 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				e = err
 				return
 			}
+			doc := ""
+			for i := len(q.Links) - 1; i >= 0; i-- {
+				if slices.Contains(o.docLinkKinds, q.Links[i].Kind) {
+					doc = q.Links[i].Target
+					break
+				}
+			}
+			data["doc"], data["pane"] = doc, pane
 			if hasLive && o.live.on {
 				data["live"] = live
 				data["live_state"] = live.State

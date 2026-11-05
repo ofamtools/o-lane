@@ -24,7 +24,8 @@ func appSettings() []ochazuke.Setting {
 	rows := []ochazuke.Setting{
 		{Name: "lanes.refresh", Type: ochazuke.SettingDuration, Default: 5 * time.Second, Description: "Standalone page refresh interval; zero disables polling"},
 		{Name: "lanes.state-presets", Type: ochazuke.SettingString, Default: defaultStatePresets, Description: "JSON preset verb to lifecycle state map; targets must exist in lanes.states"},
-		{Name: "lanes.link-kinds", Type: ochazuke.SettingList, Default: []string{"commit", "pr", "report", "question", "plan", "task", "url", "retry-of"}, Description: "Link kinds accepted by link/unlink"},
+		{Name: "lanes.link-kinds", Type: ochazuke.SettingList, Default: []string{"commit", "pr", "doc", "report", "question", "plan", "task", "url", "retry-of"}, Description: "Link kinds accepted by link/unlink"},
+		{Name: "lanes.doc-link-kinds", Type: ochazuke.SettingList, Default: []string{"doc", "report"}, Description: "Link kinds used for the lane row's doc; newest matching link wins; empty disables doc selection"},
 		{Name: "lanes.import-columns", Type: ochazuke.SettingString, Default: defaultImportColumns, Validate: func(v any) error { _, e := parseImportColumns(fmt.Sprint(v)); return e }, Description: "JSON markdown header to spec field map; case-insensitive, longest matching header prefix"},
 		{Name: "lanes.import-results", Type: ochazuke.SettingString, Default: `{"merged":"merged","shipped":"merged","running":"running","parked":"parked","stopped":"cancelled","on hold":"cancelled","report only":"done"}`, Description: "Reserved for L6: imported result to state mapping"},
 
