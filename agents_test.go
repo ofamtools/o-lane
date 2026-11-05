@@ -344,13 +344,17 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	dir := fixture(t)
 	home := t.TempDir()
 	settings := filepath.Join(home, ".claude", "settings.json")
-	if err := os.MkdirAll(filepath.Dir(settings), 0700); err != nil {
-		t.Fatal(err)
+	// Both agents' directories exist, so every item applies and a complete
+	// install reads "everything is set up" (an n/a item keeps it from that).
+	for _, d := range []string{filepath.Dir(settings), filepath.Join(home, ".codex")} {
+		if err := os.MkdirAll(d, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.WriteFile(settings, []byte(tuiosHooks), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if out := mustMain(t, dir, "setup", "status", "--home", home); !strings.Contains(out, "claude-subagent-start: missing") || !strings.Contains(out, "claude-subagent-stop: missing") {
+	if out := mustMain(t, dir, "setup", "status", "--home", home); !strings.Contains(out, "claude-subagent-start: missing") || !strings.Contains(out, "claude-subagent-stop: missing") || !strings.Contains(out, "claude-md: missing") || !strings.Contains(out, "codex-agents: missing") {
 		t.Fatalf("status: %s", out)
 	}
 	// The plan is a dry run: it shows the resulting file and writes nothing.
