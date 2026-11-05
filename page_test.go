@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -622,5 +623,68 @@ func TestPageStateDescriptions(t *testing.T) {
 		if section.Field == "state_about" {
 			t.Fatal("section opt-out ignored")
 		}
+	}
+}
+
+// tuios exits 3 with an empty list when no server runs: that is an empty
+// choice list with a plain explanation, not a failed job. Any other exit
+// status stays an error, now saying which command failed and why.
+func TestPagePaneChoicesNoServer(t *testing.T) {
+	a := pageFixture(t)
+	var stderr bytes.Buffer
+	a.errOut = &stderr
+	exit := func(status int, msg string) error {
+		return &commandError{argv: []string{"tuios", "list-sessions", "--json"}, status: status, stderr: msg, err: errors.New("exit status")}
+	}
+	a.run = func(context.Context, []string) ([]byte, error) { return []byte("[]\n"), exit(3, "") }
+	choices, e := a.paneChoices(context.Background())
+	if e != nil || len(choices) != 0 || choices == nil {
+		t.Fatalf("no server: %v, %v", choices, e)
+	}
+	if !strings.Contains(stderr.String(), "no tuios server is running") {
+		t.Fatalf("explanation: %q", stderr.String())
+	}
+	a.run = func(context.Context, []string) ([]byte, error) { return nil, exit(1, "boom") }
+	_, e = a.paneChoices(context.Background())
+	if e == nil || e.Error() != "tuios list-sessions --json failed (exit 1): boom" {
+		t.Fatalf("other failure: %v", e)
+	}
+}
+
+// The default runner reports a real nonzero exit as a commandError with the
+// program's status and stderr.
+func TestRunnerExitStatus(t *testing.T) {
+	app, e := newApp(t.TempDir(), strings.NewReader(""), io.Discard, io.Discard)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = app.run(context.Background(), []string{"sh", "-c", "echo nope >&2; exit 3"})
+	var ce *commandError
+	if !errors.As(e, &ce) || ce.status != 3 || ce.stderr != "nope" {
+		t.Fatalf("%#v", e)
+	}
+	if noServer(e) {
+		t.Fatal("sh is not a server program")
+	}
+}
+
+// A tuios that exits 3 with "[]" and nothing on stderr (what a machine
+// without a running server does, reproduced with the real binary in a
+// temporary HOME) gives an empty choice list through the default runner.
+func TestPagePaneChoicesNoServerProcess(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\necho '[]'\nexit 3\n"
+	if e := os.WriteFile(filepath.Join(bin, "tuios"), []byte(script), 0o755); e != nil {
+		t.Fatal(e)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var stderr bytes.Buffer
+	app, e := newApp(t.TempDir(), strings.NewReader(""), io.Discard, &stderr)
+	if e != nil {
+		t.Fatal(e)
+	}
+	choices, e := app.paneChoices(context.Background())
+	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no tuios server") {
+		t.Fatalf("%v %v %q", choices, e, stderr.String())
 	}
 }

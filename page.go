@@ -531,6 +531,14 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	b, e := a.run(ctx, []string{"tuios", "list-sessions", "--json"})
+	if noServer(e) {
+		// No tuios server is running: there are no windows to choose, which
+		// is an answer and not a failure of the job.
+		if a.errOut != nil {
+			fmt.Fprintln(a.errOut, "o-lane: no tuios server is running, so there are no panes to choose; start tuios (or run inside a tuios session) and try again")
+		}
+		return []ochazuke.Choice{}, nil
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -551,6 +559,9 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 			continue
 		}
 		b, e = a.run(ctx, []string{"tuios", "list-windows", "--json", "-s", name})
+		if noServer(e) {
+			break
+		}
 		if e != nil {
 			return nil, fmt.Errorf("session %s: %w", name, e)
 		}

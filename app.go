@@ -59,9 +59,10 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		cmd.WaitDelay = 500 * time.Millisecond
 		if writer, ok := ctx.Value(commandOutputKey{}).(io.Writer); ok {
 			cmd.Stdout = writer
-			return nil, cmd.Run()
+			return nil, wrapExit(argv, cmd.Run())
 		}
-		return cmd.Output()
+		out, err := cmd.Output()
+		return out, wrapExit(argv, err)
 	}
 	a.store.Warn = func(message string) { fmt.Fprintln(errOut, message) }
 	a.r.Config().App = "o-lane"
