@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The `claude-md` and `codex-agents` setup note "Tracking work (o-lane)" says every lane read and write goes through mtm (MCP `run` with `lane.lane ...`, `md.doc new`, or the mtm CLI `mtm lane lane ...`), never the `o-lane` binary or another MCP server. Its examples use the mtm spelling. Markers are unchanged, so `setup install` replaces the old block.
 - Add `claude-md` and `codex-agents` setup items: the owner's "Tracking work (o-lane)" instructions as a managed block between o-lane markers in Claude Code's and Codex's user instructions (`o-lane setup list|plan|install`), with the same `setup.skip` default as o-questions and o-cmds.
 - `pane.choices` no longer fails the job when no tuios server is running (tuios exits 3 with an empty list): the choice list is empty and stderr says so. Failed commands now report their program, exit status and first stderr line instead of "exit status N". The no-server status is the one-row table `noServerStatus`.
 - Upgrade ochazuke to v0.88.0. Mounted lanes gain the implicit `edit` verb and `i` record form, with writes committed as fields change.
