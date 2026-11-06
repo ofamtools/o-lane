@@ -104,7 +104,7 @@ func TestPageArchivedFilterReveals(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = a.r.Execute(ochazuke.Request{Noun: "lane", Verb: "restore", Args: ochazuke.Arguments{"id": old.ID}}); e != nil {
+	if _, e = a.r.Execute(ochazuke.Request{Noun: "lane", Verb: "set", Args: ochazuke.Arguments{"id": old.ID, "props": map[string]any{"@archive": false}}}); e != nil {
 		t.Fatal(e)
 	}
 	reloadPage(t, p)

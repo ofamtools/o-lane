@@ -30,7 +30,7 @@
     "/",
     ":",
     {
-      "type": "focus set list-filter-form/status"
+      "type": "focus to list-filter-form/status"
     },
     "enter",
     "l",

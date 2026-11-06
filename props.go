@@ -90,7 +90,7 @@ func (a *App) declareProps() {
 			return t, e
 		},
 	})
-	for _, key := range []string{"lane.get", "lane.set", "lane.restore"} {
+	for _, key := range []string{"lane.get", "lane.set"} {
 		if op, ok := a.r.Operations[key]; ok {
 			op.Agent = ochazuke.AgentAllow
 			a.r.Operations[key] = op

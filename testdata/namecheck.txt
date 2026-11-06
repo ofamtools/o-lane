@@ -65,8 +65,10 @@ changes.go	Store.restoreState	compare	"state"	1
 changes.go	setSpec	compare	"depends"	1
 filter.go	laneFilterValues	compare	"depends"	1
 live_reader.go	liveReader.Run	cyclo	"-"	26
+model.go	Store.view	compare	"create"	1	history entry kind written by the store (state or create), not the core create verb
 model.go	Store.view	compare	"state"	1
 model.go	activeHistory	compare	"undo"	1
+model.go	stateReason	compare	"create"	2	history entry kind written by the store (state or create), not the core create verb
 model.go	stateReason	compare	"note"	1
 model.go	stateReason	compare	"state"	2
 page.go	App.registerPage	compare	"choose-pane"	1

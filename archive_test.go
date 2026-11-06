@@ -63,7 +63,7 @@ func TestArchiveHidesAndRestores(t *testing.T) {
 		t.Fatal("open filter keeps archived", filters["open"])
 	}
 	// Restore returns the lane to the state it had before archiving.
-	f.call("lane", "restore", "Old")
+	f.call("lane", "set", "Old", "archived=false")
 	if q := f.lane("show", "Old"); q["state"] != "review" {
 		t.Fatal("restore:", q["state"])
 	}
@@ -89,10 +89,10 @@ func TestArchiveSetPropAndRepeat(t *testing.T) {
 	}
 	// Restoring a lane that was never archived changes nothing; one archived
 	// straight from creation falls back to the first open state.
-	f.call("lane", "restore", "A")
+	f.call("lane", "set", "A", "archived=false")
 	f.lane("add", "B")
 	f.lane("state", "B", "archived")
-	f.call("lane", "restore", "B")
+	f.call("lane", "set", "B", "archived=false")
 	if q := f.lane("show", "B"); q["state"] != "planned" {
 		t.Fatal(q["state"])
 	}
@@ -146,7 +146,7 @@ func TestArchiveWithoutStateRow(t *testing.T) {
 	f.fail("archive:true", "lane", "set", "Plain", "archived=true")
 	f.fail("lanes.state-presets", "lane", "archive", "Plain")
 	f.fail("unknown state", "lane", "state", "Plain", "archived")
-	f.call("lane", "restore", "Plain") // not archived: nothing to do
+	f.call("lane", "set", "Plain", "archived=false") // not archived: nothing to do
 	if got := listed(t, f, "name", "lane", "list"); got != "Plain" {
 		t.Fatal(got)
 	}
@@ -157,7 +157,7 @@ func TestArchiveAgentRights(t *testing.T) {
 	f.a.actor = Actor{Kind: "agent", Name: "implementer", Harness: "test", Pane: "w", Session: "s", Model: "m"}
 	f.lane("add", "Mine")
 	f.lane("archive", "Mine")
-	f.call("lane", "restore", "Mine")
+	f.call("lane", "set", "Mine", "archived=false")
 	f.call("lane", "set", "Mine", "archived=true")
 	f.fail("verb declaration", "lane", "delete", "Mine")
 	doc := f.call("catalog").(map[string]any)
@@ -175,7 +175,7 @@ func TestArchiveAgentRights(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"archive", "restore"} {
+	for _, name := range []string{"archive", "set"} {
 		if seen[name] != ochazuke.AgentAllow {
 			t.Fatalf("lane.%s agent right = %q", name, seen[name])
 		}
