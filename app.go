@@ -100,6 +100,8 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		}
 		a.r.Operations[op.Key()] = op
 	}
+	a.r.DefineOwn("project").Props(projectProps()...).Store(a.projectStore())
+	a.r.DefineOwn("agent").Props(agentProps()...).Store(a.agentStore())
 	if e = a.registerPage(); e != nil {
 		return nil, e
 	}
