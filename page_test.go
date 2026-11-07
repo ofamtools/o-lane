@@ -413,7 +413,7 @@ func TestPageDetailSharedMotions(t *testing.T) {
 			}
 			p.m.Width, p.m.Height = 100, height
 			p.m.View()
-			focus := a.r.Focus
+			focus := a.r.FocusID()
 			if err := openLaneDetail(a.r, "Long detail", map[string]any{"wording": strings.Repeat("A line of lane detail\n", 100)}); err != nil {
 				t.Fatal(err)
 			}
@@ -442,8 +442,8 @@ func TestPageDetailSharedMotions(t *testing.T) {
 				t.Fatalf("first window offset = %d", got)
 			}
 			pageKey(t, p, "q")
-			if a.r.TopModal() != "" || a.r.Focus != focus {
-				t.Fatalf("close left modal %q, focus %q; want %q", a.r.TopModal(), a.r.Focus, focus)
+			if a.r.TopModal() != "" || a.r.FocusID() != focus {
+				t.Fatalf("close left modal %q, focus %q; want %q", a.r.TopModal(), a.r.FocusID(), focus)
 			}
 		})
 	}
