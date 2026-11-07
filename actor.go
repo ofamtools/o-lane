@@ -98,7 +98,11 @@ func cliActor(env func(string) string) (Actor, error) {
 	return a, nil
 }
 
-var defaultLaneVerbs = (&App{}).specs()
+var defaultLaneVerbs []verbSpec
+
+// init fills the table in init, not in the declaration: the rows' run
+// methods reach Store.permit, which reads the table.
+func init() { defaultLaneVerbs = (&App{}).specs() }
 
 func (s *Store) permit(action string) error {
 	if s.Actor.Kind == "" || s.Actor.Kind == "owner" {

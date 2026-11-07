@@ -1,7 +1,7 @@
 # Code map
 
 - `main.go`: XDG data path, global `--data`, oden dispatch and ochazuke CLI mount.
-- `app.go`: catalog verbs, explicit app nouns, shared relation dispatch, transport-bound actors, settings configuration and target reveal.
+- `app.go`: the verb-spec table (each row names its own `run` method and aliases), explicit app nouns, transport-bound actors, settings configuration and target reveal.
 - `props.go`: framework standard typed `get`/`set` over the lane store, read-only filter props for prop filters and the default `open` and `stale` saved filters (kept in step with `lanes.states` by `configure`).
 - `agents.go`: agent participants' derived live state from `lanes.agent-harnesses` rows (transcript templates, tail time field, idle, hook event map, payload fields), the incremental append-only hook log (`agent-events.jsonl`), the lazy per-refresh agent reader, `agent-hook` (bounded, lock-free, exit 0) and `agent list` rows.
 - `setup.go`, `setup.json`: o-lane's declarative integrations for ochazuke's shared setup verbs; the Claude Code SubagentStart/SubagentStop hook items.
@@ -9,6 +9,7 @@
 - `filter.go`, `filter_test.go`: shared `--state` parsing and validation, the tree rule (matches plus ancestors) used by `lane tree`/`lane rows`/`lanes.state-filter`, and row values that make every filter prop present; tests cover CLI `--state`, the setting, page prop filters, saved filters and a skipped hidden-search-text test awaiting ochazuke `ListItem.Search`.
 - `settings.go`: public defaults; lifecycle rows and configurable state presets, roles, links, watcher tags and later page/import/export declarations.
 - `model.go`: specs, lanes, pane refs, links, actor-attributed history; derived lifecycle times, estimates and root rollup; state descriptions and the state reason (`stateReason`, `stateAbout`).
+- `verbs.go`: the per-row `run*` handlers, the shared call setup (`App.handler`) and the one relation handler behind the four `associate`/`unassociate` rows. `lane.choose-state` is an alias of `lane.state`; `lane.choose-pane` stays its own row because its pane argument is a pane-choice ID.
 - `actor.go`, `actor_test.go`: ordered harness detector rows (Codex, Claude Code, omp via PI session variables), explicit harness-scoped run IDs, injected-env and history/undo isolation checks, per-run identity, the single framework override and store policy fallback derived from the verb-spec rows. Writes are open; only the soft-delete row declares never, without Destructive. App calls honour framework rights overrides.
 - `plan.go`: Goldmark table parsing, validated configurable column aliases, shared JSON/plan definition handler, exact plan relation queries and read-only directory checks.
 - `plan_test.go`, `testdata/plans/`: three copied table variants and golden specs; CLI/MCP rights, idempotency, source preservation and dry-run isolation regressions.

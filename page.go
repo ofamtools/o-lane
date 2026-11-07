@@ -22,22 +22,13 @@ func (a *App) registerPage() error {
 	target.Focus = true
 	target.Noun = "lane"
 	target.From = ochazuke.SourceRow + ":id"
-	for _, v := range []struct{ name, field, source, desc string }{
-		{"choose-state", "state", "lane.states", "Choose and record a lifecycle state"},
-		{"choose-pane", "pane", "pane.choices", "Choose a tuios window to associate"},
-	} {
-		v := v
-		a.r.DefineOwn("lane").Verb(v.name, func(c ochazuke.Ctx) ochazuke.Result { return a.handle("lane", v.name, c) }, v.desc).Agent(ochazuke.AgentAllow).Positional("target", v.field)
-		op := a.r.Operations["lane."+v.name]
-		op.Parameters = map[string]ochazuke.Parameter{"target": target, v.field: {Type: "string", Required: true, Source: v.source, Description: v.desc}}
-		if v.name == "choose-pane" {
-			pane := op.Parameters["pane"]
-			pane.Free = true // A window closing after the pick never loses the relation.
-			op.Parameters["pane"] = pane
-			op.Parameters["role"] = ochazuke.Parameter{Type: "string", Source: "pane.roles", Description: "Participant role; default implementer"}
-		}
-		a.r.Operations[op.Key()] = op
-	}
+	// lane.choose-state is an alias of lane.state (see specs). choose-pane is
+	// its own verb: its pane argument is a pane choice ID, not a window label.
+	a.r.DefineOwn("lane").Verb("choose-pane", a.handler(verbSpec{name: "choose-pane", run: (*App).runLaneChoosePane}), "Choose a tuios window to associate").Agent(ochazuke.AgentAllow).Positional("target", "pane")
+	op := a.r.Operations["lane.choose-pane"]
+	op.Parameters = map[string]ochazuke.Parameter{"target": target, "pane": {Type: "string", Required: true, Free: true, Source: "pane.choices", Description: "Choose a tuios window to associate"}, // A window closing after the pick never loses the relation.
+		"role": {Type: "string", Source: "pane.roles", Description: "Participant role; default implementer"}}
+	a.r.Operations[op.Key()] = op
 	a.r.DefineOwn("lane").Verb("states", func(c ochazuke.Ctx) ochazuke.Result {
 		if e := a.configure(); e != nil {
 			return done(nil, e)

@@ -296,7 +296,7 @@ func TestPageCatalogMount(t *testing.T) {
 		t.Fatal(nodes)
 	}
 	// The six domain key rows travel in the catalog; no application key switch.
-	want := map[string]string{"enter": "show", "s": "choose-state", "g p": "focus-pane", "a": "choose-pane", "n": "note", "y": "yank-id"}
+	want := map[string]string{"enter": "show", "s": "state", "g p": "focus-pane", "a": "choose-pane", "n": "note", "y": "yank-id"}
 	for _, row := range doc.Bindings {
 		if row.Noun == "lane" {
 			if verb, ok := want[row.Keys]; ok && verb == row.Request.Verb {
@@ -389,7 +389,7 @@ func TestPageTargetComesFromTheRow(t *testing.T) {
 	}
 	p.m.Width, p.m.Height = 140, 38
 	p.m.View()
-	for _, key := range []string{"lane.show", "lane.note", "lane.yank-id", "lane.choose-state", "lane.choose-pane", "lane.focus-pane"} {
+	for _, key := range []string{"lane.show", "lane.note", "lane.yank-id", "lane.state", "lane.choose-pane", "lane.focus-pane"} {
 		if got := a.r.Operations[key].Parameters["target"].From; got != "row:id" {
 			t.Errorf("%s target From %q", key, got)
 		}
