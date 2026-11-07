@@ -25,10 +25,10 @@ func (a *App) registerPage() error {
 	// lane.choose-state is an alias of lane.state (see specs). choose-pane is
 	// its own verb: its pane argument is a pane choice ID, not a window label.
 	a.r.DefineOwn("lane").Verb("choose-pane", a.handler(verbSpec{name: "choose-pane", run: (*App).runLaneChoosePane}), "Choose a tuios window to associate").Agent(ochazuke.AgentAllow).Positional("target", "pane")
-	op := a.r.Operations["lane.choose-pane"]
+	op := a.r.Operations.At("lane.choose-pane")
 	op.Parameters = map[string]ochazuke.Parameter{"target": target, "pane": {Type: "string", Required: true, Free: true, Source: "pane.choices", Description: "Choose a tuios window to associate"}, // A window closing after the pick never loses the relation.
 		"role": {Type: "string", Source: "pane.roles", Description: "Participant role; default implementer"}}
-	a.r.Operations[op.Key()] = op
+	a.r.Operations.Set(op)
 	a.r.DefineOwn("lane").Verb("states", func(c ochazuke.Ctx) ochazuke.Result {
 		if e := a.configure(); e != nil {
 			return done(nil, e)
@@ -82,12 +82,12 @@ func (a *App) registerPage() error {
 	a.r.DefineOwn("lane").Verb("rows", rows(false), "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	a.r.DefineOwn("lane").Verb(pageRowsVerb, rows(true), "List the Lanes page's rows: archived lanes kept and flagged for the list to hide or show (same handler and parameters as lane.rows, without archived)").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	params := map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter")}
-	pageOp := a.r.Operations["lane."+pageRowsVerb]
+	pageOp := a.r.Operations.At(ochazuke.Key("lane." + pageRowsVerb))
 	pageOp.Parameters = params
-	a.r.Operations[pageOp.Key()] = pageOp
-	rowsOp := a.r.Operations["lane.rows"]
+	a.r.Operations.Set(pageOp)
+	rowsOp := a.r.Operations.At("lane.rows")
 	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": params["project"], "state": params["state"], "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a state names an archive state"}}
-	a.r.Operations[rowsOp.Key()] = rowsOp
+	a.r.Operations.Set(rowsOp)
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
 	for _, row := range []struct{ key, verb string }{{"enter", "show"}, {"s", "choose-state"}, {"g p", "focus-pane"}, {"a", "choose-pane"}, {"n", "note"}, {"y", "yank-id"}} {

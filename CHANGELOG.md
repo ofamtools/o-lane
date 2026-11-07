@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Upgrade ochazuke to v0.102.0, oden to v0.3.0 and monogatari to v0.6.0 (the Operations registry and three-part keys; `cmd/opname` moved the code). o-lane declares its namespace, `lane` (`ochazuke.DeclareNamespace`), so its keys are `lane.lane.<verb>` and the catalog carries `namespace: lane`. CLI spellings are unchanged.
+
 - Dispatch verbs from the spec table: each row names its own `run` method (`verbs.go`) and the `App.handle` switch is gone. `lane.choose-state` is now an alias of `lane.state` (one operation, the Lanes page `s` row resolves to `lane.state`); `lane.state`'s `state` parameter is required with the `lane.states` choices, and `--from-tag` covers it, so `lane state LANE --from-tag TAG` is unchanged. `lane.choose-pane` stays its own verb. The namecheck baseline lost 49 rows.
 
 - The `claude-md` and `codex-agents` setup note "Tracking work (o-lane)" says every lane read and write goes through mtm (MCP `run` with `lane.lane ...`, `md.doc new`, or the mtm CLI `mtm lane lane ...`), never the `o-lane` binary or another MCP server. Its examples use the mtm spelling. Markers are unchanged, so `setup install` replaces the old block.

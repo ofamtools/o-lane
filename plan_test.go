@@ -226,7 +226,7 @@ func TestPlanAgentRights(t *testing.T) {
 	f.lane("reword", q.ID, "agent amended plan wording")
 	f.fail("verb declaration", "lane", "delete", q.ID)
 	for _, key := range []string{"lane.define", "plan.define", "plan.lanes"} {
-		if f.a.r.AgentRight(f.a.r.Operations[key], false).Right != ochazuke.AgentAllow {
+		if f.a.r.AgentRight(f.a.r.Operations.At(ochazuke.Key(key)), false).Right != ochazuke.AgentAllow {
 			t.Fatalf("%s not allowed", key)
 		}
 	}

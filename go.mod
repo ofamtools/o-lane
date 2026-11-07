@@ -7,9 +7,9 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/yuin/goldmark v1.7.8
 	golang.org/x/sys v0.47.0
-	ofam.dev/monogatari v0.4.1
-	ofam.dev/ochazuke v0.96.0
-	ofam.dev/oden v0.2.0
+	ofam.dev/monogatari v0.6.0
+	ofam.dev/ochazuke v0.102.0
+	ofam.dev/oden v0.3.0
 )
 
 require (

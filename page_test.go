@@ -390,7 +390,7 @@ func TestPageTargetComesFromTheRow(t *testing.T) {
 	p.m.Width, p.m.Height = 140, 38
 	p.m.View()
 	for _, key := range []string{"lane.show", "lane.note", "lane.yank-id", "lane.state", "lane.choose-pane", "lane.focus-pane"} {
-		if got := a.r.Operations[key].Parameters["target"].From; got != "row:id" {
+		if got := a.r.Operations.At(ochazuke.Key(key)).Parameters["target"].From; got != "row:id" {
 			t.Errorf("%s target From %q", key, got)
 		}
 	}
@@ -714,5 +714,26 @@ func TestPagePaneChoicesNoServerProcess(t *testing.T) {
 	choices, e := app.paneChoices(context.Background())
 	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no tuios server") {
 		t.Fatalf("%v %v %q", choices, e, stderr.String())
+	}
+}
+
+func TestCatalogDeclaresSingularNamespace(t *testing.T) {
+	a := pageFixture(t)
+	b, e := ocli.Catalog(a.r, "o-lane", version)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var doc ocli.CatalogDoc
+	if e = json.Unmarshal(b, &doc); e != nil {
+		t.Fatal(e)
+	}
+	if doc.Namespace != "lane" || ochazuke.DefaultNamespace != "lane" {
+		t.Fatalf("catalog namespace %q, default %q; want lane", doc.Namespace, ochazuke.DefaultNamespace)
+	}
+	if got, e := ocli.CatalogNamespace(doc, "o-lane"); e != nil || got != "lane" {
+		t.Fatal(got, e)
+	}
+	if op, ok := a.r.Operations.Find("lane.state"); !ok || op.Key.Full() != "lane.lane.state" {
+		t.Fatal(op.Key, ok)
 	}
 }

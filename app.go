@@ -47,6 +47,17 @@ func param(desc string) ochazuke.Parameter {
 	return ochazuke.Parameter{Type: "string", Description: desc}
 }
 func required(desc string) ochazuke.Parameter { p := param(desc); p.Required = true; return p }
+
+// Namespace is the singular namespace o-lane declares (lexicon plan): its
+// operations are lane.<noun>.<verb>, and a host mounts its catalog under it.
+const Namespace = "lane"
+
+func init() {
+	if err := ochazuke.DeclareNamespace(Namespace); err != nil {
+		panic(err)
+	}
+}
+
 func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	actor, e := cliActor(os.Getenv)
 	if e != nil {
@@ -89,7 +100,7 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		if len(v.positional) > 0 {
 			b.Positional(v.positional...)
 		}
-		op := a.r.Operations[v.noun+"."+v.name]
+		op := a.r.Operations.At(ochazuke.Key(v.noun + "." + v.name))
 		op.Parameters = v.params
 		if t, ok := op.Parameters["target"]; ok && v.noun == "lane" {
 			// A lane verb's target is the focused lane row when a key, the help or the palette runs it.
@@ -100,7 +111,7 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		if !v.read {
 			op.HistoryKind = ochazuke.HistoryChange
 		}
-		a.r.Operations[op.Key()] = op
+		a.r.Operations.Set(op)
 	}
 	a.r.DefineOwn("project").Props(projectProps()...).Store(a.projectStore())
 	a.r.DefineOwn("agent").Props(agentProps()...).Store(a.agentStore())
@@ -270,13 +281,13 @@ func (a *App) bindActor(c ochazuke.Ctx) {
 	// Store direct callers use the same defaults. App calls honour owner rights
 	// overrides using the one framework policy source, never a second allowlist.
 	s.Permit = func(action string) error {
-		op, ok := a.r.Operations["lane."+action]
+		op, ok := a.r.Operations.Find(ochazuke.Key("lane." + action))
 		if !ok {
 			return fmt.Errorf("unknown action %s", action)
 		}
 		r := a.r.AgentRight(op, false)
 		if r.Right != ochazuke.AgentAllow {
-			return &ochazuke.RefusedError{Verb: op.Key(), Rule: r.Rule, Reason: "agent right is " + r.Right}
+			return &ochazuke.RefusedError{Verb: op.Key.Short(), Rule: r.Rule, Reason: "agent right is " + r.Right}
 		}
 		return nil
 	}

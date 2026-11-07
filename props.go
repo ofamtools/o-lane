@@ -91,9 +91,9 @@ func (a *App) declareProps() {
 		},
 	})
 	for _, key := range []string{"lane.get", "lane.set"} {
-		if op, ok := a.r.Operations[key]; ok {
+		if op, ok := a.r.Operations.Find(ochazuke.Key(key)); ok {
 			op.Agent = ochazuke.AgentAllow
-			a.r.Operations[key] = op
+			a.r.Operations.Set(op)
 		}
 	}
 }
