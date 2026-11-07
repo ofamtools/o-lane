@@ -1,6 +1,7 @@
 # Code map
 
 - `main.go`: XDG data path, global `--data`, oden dispatch and ochazuke CLI mount.
+- `pickers.go`: the lane, project and agent noun pickers (`PickerDef`), listed by the catalog.
 - `app.go`: the verb-spec table (each row names its own `run` method and aliases), explicit app nouns, transport-bound actors, settings configuration and target reveal.
 - `props.go`: framework standard typed `get`/`set` over the lane store, read-only filter props for prop filters and the default `open` and `stale` saved filters (kept in step with `lanes.states` by `configure`).
 - `agents.go`: agent participants' derived live state from `lanes.agent-harnesses` rows (transcript templates, tail time field, idle, hook event map, payload fields), the incremental append-only hook log (`agent-events.jsonl`), the lazy per-refresh agent reader, `agent-hook` (bounded, lock-free, exit 0) and `agent list` rows.

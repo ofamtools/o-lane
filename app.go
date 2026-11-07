@@ -110,6 +110,9 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	if e = a.declareSetup(); e != nil {
 		return nil, e
 	}
+	if e = declarePickers(a.r); e != nil {
+		return nil, e
+	}
 	return a, nil
 }
 func (a *App) shell() *ocli.Shell {
