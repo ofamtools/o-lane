@@ -102,12 +102,14 @@ type pageOptions struct {
 	now                                                                time.Time
 	live                                                               liveOptions
 	liveTones, rollup                                                  bool
-	liveRows                                                           map[string]Live
-	staleLiveRows                                                      map[string]Live
-	staleFlag                                                          bool
-	groupProjects, projectColumn, nameTone, statusAbout                bool
-	project                                                            string
-	hideArchived                                                       bool
+	// toneScope is row (every cell draws in the lifecycle tone) or cell (the status cell only).
+	toneScope                                           string
+	liveRows                                            map[string]Live
+	staleLiveRows                                       map[string]Live
+	staleFlag                                           bool
+	groupProjects, projectColumn, nameTone, statusAbout bool
+	project                                             string
+	hideArchived                                        bool
 	// listHides leaves archived lanes to the list: the rows carry the archived
 	// prop and collection.hide-archived and the archived filter decide what shows.
 	// False is the portable feed (lane rows from the CLI or MCP), which drops
@@ -120,7 +122,7 @@ type pageOptions struct {
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), rollup: cfg.Bool("lanes.rollup-counts"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.status-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), statusAbout: cfg.Bool("lanes.status-descriptions"), project: cfg.String("lanes.project-filter"), statuses: cfg.Strings("lanes.status-filter"), hideArchived: cfg.Bool("collection.hide-archived"), listHides: true}
+	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), rollup: cfg.Bool("lanes.rollup-counts"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.status-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), toneScope: cfg.String("lanes.status-tone-scope"), statusAbout: cfg.Bool("lanes.status-descriptions"), project: cfg.String("lanes.project-filter"), statuses: cfg.Strings("lanes.status-filter"), hideArchived: cfg.Bool("collection.hide-archived"), listHides: true}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "Status", Max: 34, Priority: 1}}
@@ -468,6 +470,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			if showLive && o.liveTones && live.Tone != "" {
 				nameTone = live.Tone
 			}
+			row.Tones = append(row.Tones, rowBaseTones(o, s.statuses()[v.RolledStatus].Tone, len(cells))...)
 			if o.tones {
 				span := ochazuke.CellTone(1, s.statuses()[v.RolledStatus].Tone)
 				if showLive {
@@ -608,4 +611,21 @@ func paneChoice(ref string) (Pane, error) {
 		return Pane{}, e
 	}
 	return Pane{Session: session, Window: window, Harness: values.Get("harness"), Role: "implementer"}, nil
+}
+
+// rowBaseTones are the tones laid first on a row so the spans after them win:
+// every cell in the status tone when lanes.status-tone-scope says the scope
+// covers the row (toneScopes data), none otherwise. The name cell follows
+// lanes.name-tone like it does for the status-cell spans.
+func rowBaseTones(o pageOptions, tone string, cells int) []ochazuke.ToneSpan {
+	if !o.tones || tone == "" || !toneScopes[o.toneScope] {
+		return nil
+	}
+	var out []ochazuke.ToneSpan
+	for i := 0; i < cells; i++ {
+		if i > 0 || o.nameTone {
+			out = append(out, ochazuke.CellTone(i, tone))
+		}
+	}
+	return out
 }

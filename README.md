@@ -144,6 +144,7 @@ Page settings and defaults:
 | `lanes.live-tones` | true | Keep live words and glyphs without their colour |
 | `lanes.agent-live` | true | Agent participants read no transcripts or hook log; their lanes show no agent status |
 | `lanes.agent-idle` | 3m | Set to 0 so an agent never reads idle |
+| `lanes.status-tone-scope` | row | `cell` colours only the status cell; `row` draws every cell of the row in the lifecycle tone (`lanes.status-tones` false turns both off) |
 | `lanes.name-tone` | true | Plain lane names; otherwise the name uses the tone that draws its status cell (live tone when shown, else lifecycle tone). Selection and focus styles still win |
 | `lanes.durations` | true | Hide the elapsed/duration column |
 | `lanes.pane-column` | true | Hide the pane-role column |

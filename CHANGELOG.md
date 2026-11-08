@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Changed: the Lanes page draws a whole row in its status tone (every cell, as per-cell tones so the mounted mtm page draws them too), not only the status cell. Planned (no tone) rows stay default, archived rows keep their dim tone, the cursor highlight still wins, and live, stale and name tones still layer on top. Setting `lanes.status-tone-scope` = `row` (default) or `cell` (the old status-cell-only look); `lanes.status-tones` false still turns colour off.
+
 ## v0.3.0 (2026-11-08)
 
 - Changed: every default status but `planned` has its own colour (the `tone` in `lanes.statuses`): planned none (default colour), running `state.working` (blue), parked `lane.parked` (orange), review `lane.review` (violet), merged `lane.merged` (teal, bold), done `state.done` (green), cancelled `lane.cancelled` (rose), archived `lane.archived` (muted, dim). merged and done no longer share a tone. The `lane.*` rows are declared with `Appearance.SetTone` (light and dark colours) and are overridden in `themes.json` `tones`, or by naming another tone in `lanes.statuses`; test `TestDefaultStatusTonesAreDistinct`. Existing `lanes.statuses` saved in settings.json keep their own tones.

@@ -191,6 +191,10 @@ func TestLivePageOptOuts(t *testing.T) {
 	a.run = func(context.Context, []string) ([]byte, error) {
 		return []byte(`{"windows":[{"window_id":"w1","agent_state":"needs_input"}]}`), nil
 	}
+	// The spans under test are the status cell's; row scope only adds a base under them.
+	if err := a.r.Settings().Set("lanes.status-tone-scope", "cell"); err != nil {
+		t.Fatal(err)
+	}
 	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
 	if err != nil {
 		t.Fatal(err)

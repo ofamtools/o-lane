@@ -39,3 +39,4 @@ props.go	App.refreshStatusEnum	compare	"status"	1	the status prop and the status
 props.go	archiveFlag	case	"on"	1
 store.go	changedLanes	compare	"undo"	1
 tui.go	mountPage	compare	"lane"	1
+settings.go	var toneScopes	table	"row"	1	the accepted values of lanes.status-tone-scope, as data the page and the validator both read; a value is one table row

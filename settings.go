@@ -7,6 +7,12 @@ import (
 	"ofam.dev/ochazuke"
 )
 
+// Values of lanes.status-tone-scope.
+const toneScopeRow = "row"
+
+// toneScopes maps each accepted scope to whether it tones the whole row.
+var toneScopes = map[string]bool{toneScopeRow: true, "cell": false}
+
 // defaultStatuses give every status but planned its own tone (planned has
 // none: the default colour). running and done use ochazuke's state tones; the
 // others are the lane.* tones of statusTones. A user overrides any of it by
@@ -53,6 +59,12 @@ func appSettings() []ochazuke.Setting {
 			_, e := parseStatuses(text)
 			return e
 		}, Default: defaultStatuses, Description: "JSON lifecycle rows: name, tone, starts, ends, open, archive (the status that carries the archive role), description (shown under the focused lane; empty shows nothing)"},
+		{Name: "lanes.status-tone-scope", Type: ochazuke.SettingString, Default: toneScopeRow, Validate: func(v any) error {
+			if _, ok := toneScopes[fmt.Sprint(v)]; !ok {
+				return fmt.Errorf("lanes.status-tone-scope: use row or cell")
+			}
+			return nil
+		}, Description: "Where a lifecycle status's tone draws: row (every cell of the lane's row) or cell (the status cell only); lanes.status-tones false turns colour off"},
 		{Name: "lanes.pane-roles", Type: ochazuke.SettingList, Default: []string{"implementer", "reviewer", "watcher", "coordinator"}, Description: "Pane roles"},
 		{Name: "lanes.tag-statuses", Type: ochazuke.SettingString, Default: `{"LANE-DONE":"review"}`, Description: "JSON tag to lifecycle status map; unmapped tags append notes"},
 		{Name: "lanes.plans-dir", Type: ochazuke.SettingString, Default: "", Description: "Optional plan directory; unset by default"},

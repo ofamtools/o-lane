@@ -737,3 +737,42 @@ func TestCatalogDeclaresSingularNamespace(t *testing.T) {
 		t.Fatal(op.Key, ok)
 	}
 }
+
+func TestStatusToneScope(t *testing.T) {
+	a := pageFixture(t)
+	if got := a.r.Settings().String("lanes.status-tone-scope"); got != "row" {
+		t.Fatal("default scope", got)
+	}
+	q, e := a.store.Add(Spec{Name: "toned"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.store.Status(q.ID, "parked", ""); e != nil {
+		t.Fatal(e)
+	}
+	for scope, wantCells := range map[string]int{"row": -1, "cell": 2} {
+		if e = a.r.Settings().Set("lanes.status-tone-scope", scope); e != nil {
+			t.Fatal(e)
+		}
+		rows, e := laneRows(a.store, a.pageOptions())
+		if e != nil || len(rows) != 1 {
+			t.Fatal(rows, e)
+		}
+		seen := map[int]bool{}
+		for _, tone := range rows[0].Tones {
+			if tone.Tone == "lane.parked" {
+				seen[tone.Cell] = true
+			}
+		}
+		if scope == "row" {
+			wantCells = len(rows[0].Cells)
+		}
+		// cell scope: the status cell, plus the name which follows it (lanes.name-tone).
+		if len(seen) != wantCells || !seen[1] || !seen[0] {
+			t.Fatal(scope, seen, rows[0].Tones)
+		}
+	}
+	if e = a.r.Settings().Set("lanes.status-tone-scope", "bogus"); e == nil {
+		t.Fatal("bad scope accepted")
+	}
+}
