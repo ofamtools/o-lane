@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: the "Tracking work (o-lane)" setup notes (`setup.json` claude-md and codex-agents), the README and a verb help text told agents to run `mtm lane status done --id ID` and `mtm lane status`, which answer "command not found" (the short spelling reaches operations, not prop-shaped requests). They now give the one-call form `mtm lane set ID status=VALUE reason="..."`; the test asserts the old spelling is absent.
+
 ## v0.2.0 (2026-11-08)
 
 - Changed, breaking (LX8c, lexicon, one shot: no old-name aliases; every rename is in `docs/lexicon-renames-v0.105.tsv`): requires ochazuke v0.105.0 and monogatari v0.8.0. One word has one part of speech.

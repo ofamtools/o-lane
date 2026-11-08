@@ -213,7 +213,7 @@ func (a *App) specs() []verbSpec {
 		{"lane", "focus-pane", "Focus an associated pane using the configured argv", common(map[string]ochazuke.Parameter{"role": param("Optional role filter")}), []string{"target"}, true, "", (*App).runLaneFocusPane, nil, false},
 		{"lane", "yank-id", "Copy the lane ID to the framework register", common(nil), []string{"target"}, true, "", (*App).runLaneYankID, nil, false},
 		{"lane", "yank-path", "Copy the worktree path to the framework register", common(nil), []string{"target"}, true, "", (*App).runLaneYankPath, nil, false},
-		{"lane", "delete", "Hide a lane and subtree for good; undo restores them. Agents archive instead (lane archive, or lane status archived)", common(nil), []string{"target"}, false, ochazuke.AgentNever, (*App).runLaneDelete, nil, false},
+		{"lane", "delete", "Hide a lane and subtree for good; undo restores them. Agents archive instead (lane archive, or lane set ID status=archived)", common(nil), []string{"target"}, false, ochazuke.AgentNever, (*App).runLaneDelete, nil, false},
 		{"lane", "undo", "Restore the latest change; agents can undo their own latest change", nil, nil, false, "", (*App).runLaneUndo, nil, false},
 	}
 	for _, v := range []struct {
