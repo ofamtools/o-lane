@@ -224,6 +224,29 @@ func (r *liveReader) apply(event liveEvent) bool {
 	return false
 }
 
+// eventLineHandler decodes each output line of the events command and sends
+// its rows on events; a document line marks sawDoc and that the boot id is known.
+func eventLineHandler(ctx context.Context, events chan<- liveEvent, sawBoot *bool, sawDoc *atomic.Bool) func([]byte) error {
+	return func(line []byte) error {
+		rows, doc, err := decodeEvents(line, *sawBoot)
+		if err != nil {
+			return fmt.Errorf("pane events: %w", err)
+		}
+		if doc {
+			sawDoc.Store(true)
+			*sawBoot = true
+		}
+		for _, event := range rows {
+			select {
+			case events <- event:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+}
+
 // One reader owns one subscription. Cache replacement and notifications are
 // bounded; only the UI loop touches settings or framework objects. Seq numbers
 // may jump because the stream is filtered: only an explicit gap means data loss.
@@ -244,24 +267,7 @@ func (r *liveReader) Run(ctx context.Context) {
 		sawBoot := boot != ""
 		var sawDoc atomic.Bool
 		go func() {
-			ended <- streamCommand(streamCtx, r.run, argv, func(line []byte) error {
-				rows, doc, err := decodeEvents(line, sawBoot)
-				if err != nil {
-					return fmt.Errorf("pane events: %w", err)
-				}
-				if doc {
-					sawDoc.Store(true)
-					sawBoot = true
-				}
-				for _, event := range rows {
-					select {
-					case events <- event:
-					case <-streamCtx.Done():
-						return streamCtx.Err()
-					}
-				}
-				return nil
-			})
+			ended <- streamCommand(streamCtx, r.run, argv, eventLineHandler(streamCtx, events, &sawBoot, &sawDoc))
 			close(events)
 		}()
 		// The ack's seq is a replay ceiling, not a delivered-event cursor. After a

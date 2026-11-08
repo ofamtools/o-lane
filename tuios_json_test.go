@@ -45,7 +45,7 @@ func TestTuiosPaneChoicesAndFocus(t *testing.T) {
 						return tuiosSample(t, "list-sessions", sessions), nil
 					case reflect.DeepEqual(argv, []string{"tuios", "list-windows", "--json", "-s", "hub"}):
 						return tuiosSample(t, "list-windows", windows), nil
-					case reflect.DeepEqual(argv, []string{"tuios", "focus-window", "-s", "hub", "fixture-window"}):
+					case reflect.DeepEqual(argv, []string{"mtm", "pane", "switch", "--session", "hub", "--window", "fixture-window"}):
 						return nil, nil
 					default:
 						return nil, fmt.Errorf("unexpected command %q", argv)
@@ -76,7 +76,7 @@ func TestTuiosPaneChoicesAndFocus(t *testing.T) {
 				p.m.View()
 				pageKey(t, p, "g")
 				pageKey(t, p, "p")
-				want := []string{"tuios", "focus-window", "-s", "hub", "fixture-window"}
+				want := []string{"mtm", "pane", "switch", "--session", "hub", "--window", "fixture-window"}
 				if !reflect.DeepEqual(calls[len(calls)-1], want) {
 					t.Fatalf("focus did not reach recorded session/window: %v", calls)
 				}

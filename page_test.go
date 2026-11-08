@@ -46,7 +46,7 @@ func pageFixture(t *testing.T) *App {
 			return []byte(`[{"name":"fixture-session"}]`), nil
 		case "tuios list-windows --json -s fixture-session":
 			return []byte(`{"windows":[{"window_id":"fixture-window","name":"Worker","harness":"codex"}]}`), nil
-		case "tuios focus-window -s fixture-session fixture-window":
+		case "mtm pane switch --session fixture-session --window fixture-window":
 			return nil, nil
 		}
 		return nil, fmt.Errorf("unexpected runner call: %q", argv)
@@ -125,7 +125,7 @@ func TestLaneStories(t *testing.T) {
 				}
 				run := a.run
 				a.run = func(ctx context.Context, argv []string) ([]byte, error) {
-					if len(argv) > 1 && argv[1] == "focus-window" {
+					if len(argv) > 1 && argv[1] == "pane" && len(argv) > 2 && argv[2] == "switch" {
 						focused = append(focused, append([]string(nil), argv...))
 					}
 					return run(ctx, argv)
@@ -170,7 +170,7 @@ func TestLaneStories(t *testing.T) {
 				}
 			}
 			if story.Name == "lanes/focus-pane" {
-				want := [][]string{{"tuios", "focus-window", "-s", "fixture-session", "fixture-window"}}
+				want := [][]string{{"mtm", "pane", "switch", "--session", "fixture-session", "--window", "fixture-window"}}
 				if !reflect.DeepEqual(focused, want) {
 					t.Fatalf("focus commands = %v, want %v", focused, want)
 				}
@@ -339,7 +339,7 @@ func TestPageFocusAndYank(t *testing.T) {
 	calls := 0
 	a.run = func(_ context.Context, argv []string) ([]byte, error) {
 		calls++
-		if !reflect.DeepEqual(argv, []string{"tuios", "focus-window", "-s", "fixture-session", "fixture-window"}) {
+		if !reflect.DeepEqual(argv, []string{"mtm", "pane", "switch", "--session", "fixture-session", "--window", "fixture-window"}) {
 			return nil, fmt.Errorf("unexpected %v", argv)
 		}
 		return nil, nil
