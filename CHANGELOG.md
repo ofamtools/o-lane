@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.1 (2026-11-08)
 
 - Fixed: the "Tracking work (o-lane)" setup notes (`setup.json` claude-md and codex-agents), the README and a verb help text told agents to run `mtm lane status done --id ID` and `mtm lane status`, which answer "command not found" (the short spelling reaches operations, not prop-shaped requests). They now give the one-call form `mtm lane set ID status=VALUE reason="..."`; the test asserts the old spelling is absent.
 
