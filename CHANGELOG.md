@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-11-08)
 
 - Changed, breaking (LX8c, lexicon, one shot: no old-name aliases; every rename is in `docs/lexicon-renames-v0.105.tsv`): requires ochazuke v0.105.0 and monogatari v0.8.0. One word has one part of speech.
   - The lifecycle status is the writable `status` prop of lane: `lane status done --id ID`, `lane set ID status done`, MCP `lane.lane.set {prop: status, value}`. The verbs `state`, `states`, `choose-state`, `review` and `copy` are gone; `lane.states` (the choices source) is the status prop's Enum (the configured `lanes.statuses` names, kept in step by `configure`). `review` is the status `review` (the preset row `review` is dropped from `lanes.status-presets`). The reason is the writable `reason` prop, so one multi-prop set carries both: `lane set ID status=review reason="branch X"` (one write, one history entry; `reason` alone appends a note); `lane status review --id ID` needs none, and `park`, `finish`, `cancel` keep `--note`.
