@@ -101,7 +101,7 @@ type pageOptions struct {
 	tree, guides, durations, panes, history, tones, detail, hideClosed bool
 	now                                                                time.Time
 	live                                                               liveOptions
-	liveTones                                                          bool
+	liveTones, rollup                                                  bool
 	liveRows                                                           map[string]Live
 	staleLiveRows                                                      map[string]Live
 	staleFlag                                                          bool
@@ -120,7 +120,7 @@ type pageOptions struct {
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.status-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), statusAbout: cfg.Bool("lanes.status-descriptions"), project: cfg.String("lanes.project-filter"), statuses: cfg.Strings("lanes.status-filter"), hideArchived: cfg.Bool("collection.hide-archived"), listHides: true}
+	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), rollup: cfg.Bool("lanes.rollup-counts"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.status-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), statusAbout: cfg.Bool("lanes.status-descriptions"), project: cfg.String("lanes.project-filter"), statuses: cfg.Strings("lanes.status-filter"), hideArchived: cfg.Bool("collection.hide-archived"), listHides: true}
 }
 func (o pageOptions) columns() []ochazuke.Column {
 	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "Status", Max: 34, Priority: 1}}
@@ -135,6 +135,15 @@ func (o pageOptions) columns() []ochazuke.Column {
 		cols = append(cols, ochazuke.Column{Title: "Panes", Max: 28, Priority: 2})
 	}
 	return append(cols, ochazuke.Column{Title: "Agents", Max: 44, Priority: 6})
+}
+
+// rollupText is the " · done/total" suffix of a status cell, empty when the
+// subtree is complete or the lanes.rollup-counts setting is off.
+func (o pageOptions) rollupText(done, total int) string {
+	if !o.rollup || total <= done {
+		return ""
+	}
+	return fmt.Sprintf(" · %d/%d", done, total)
 }
 func lanePage(o pageOptions) ocli.CatalogPage {
 	p := ocli.CatalogPage{ID: pageID, Title: "Lanes", Layout: ocli.LayoutStack, Lists: []ocli.CatalogList{{ID: listID, Noun: "lane", Source: "lane." + pageRowsVerb, Title: "Lanes", Tree: o.tree, Guides: o.guides}}}
@@ -252,6 +261,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	// A status filter naming an archive status asks for those lanes: the rows
 	// then do not flag them, so the list's own archive hiding leaves them be.
 	asked := slices.ContainsFunc(o.statuses, func(name string) bool { return s.statuses()[name].Archive })
+	rolls := s.rollups(lanes)
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -269,6 +279,10 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				continue
 			}
 			status := v.RolledStatus
+			// A lane with unfinished work below it shows how much is finished.
+			// Complete is the ends role in lanes.statuses, never a status name.
+			rollDone, rollTotal := rolls[q.ID][0], rolls[q.ID][1]
+			status += o.rollupText(rollDone, rollTotal)
 			cells := []string{q.Name, status}
 			if o.projectColumn {
 				project := v.EffectiveProject
@@ -403,6 +417,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				data["live_status"] = live.Status
 			}
 			data["stale"], data["stale_reason"] = stale, staleReason
+			data["children_done"], data["children_total"] = rollDone, rollTotal
 			laneFilterValues(data, q, s.statuses()[q.Status].Archive && !asked)
 			if about := statusAbout(q.Status, v.StatusDescription, v.StatusReason); o.statusAbout && about != "" {
 				data["status_about"] = about
@@ -448,13 +463,13 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			// when it is shown, else the lifecycle tone. Both come from data.
 			nameTone := ""
 			if o.tones {
-				nameTone = s.statuses()[status].Tone
+				nameTone = s.statuses()[v.RolledStatus].Tone
 			}
 			if showLive && o.liveTones && live.Tone != "" {
 				nameTone = live.Tone
 			}
 			if o.tones {
-				span := ochazuke.CellTone(1, s.statuses()[status].Tone)
+				span := ochazuke.CellTone(1, s.statuses()[v.RolledStatus].Tone)
 				if showLive {
 					span.To = len([]rune(status))
 				}

@@ -480,3 +480,14 @@ func (a *App) runAgentList(k *call) ochazuke.Result {
 	out, e := a.agentRows()
 	return done(out, e)
 }
+
+// runLaneArchive is lane.archive: the archive preset on one lane, or with
+// --finished-trees the collection form over every root tree that is entirely
+// complete (--dry-run lists them and writes nothing).
+func (a *App) runLaneArchive(k *call) ochazuke.Result {
+	if finished, _ := k.c.Args["finished-trees"].(bool); finished {
+		dry, _ := k.c.Args["dry-run"].(bool)
+		return done(a.store.ArchiveFinished(dry, k.str("note")))
+	}
+	return a.runLanePreset(k)
+}

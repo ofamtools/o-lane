@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Changed: every default status but `planned` has its own colour (the `tone` in `lanes.statuses`): planned none (default colour), running `state.working` (blue), parked `lane.parked` (orange), review `lane.review` (violet), merged `lane.merged` (teal, bold), done `state.done` (green), cancelled `lane.cancelled` (rose), archived `lane.archived` (muted, dim). merged and done no longer share a tone. The `lane.*` rows are declared with `Appearance.SetTone` (light and dark colours) and are overridden in `themes.json` `tones`, or by naming another tone in `lanes.statuses`; test `TestDefaultStatusTonesAreDistinct`. Existing `lanes.statuses` saved in settings.json keep their own tones.
+- Added: a lane with unfinished work below it shows `done/total` after its status on the Lanes page (`3/5`; all descendants, archived ones excluded; done is a status with `ends: true`). Rows carry `children_done` and `children_total`. Setting `lanes.rollup-counts` (default true) turns it off.
+- Added: `lane archive --finished-trees [--dry-run]` archives the root of every root tree whose lanes are all complete (`ends` or the archive role); a tree with one incomplete lane is untouched, descendants keep their statuses and are hidden with the root, restoring the root brings the tree back, one undo, nothing deleted. `--dry-run` lists the trees (`archived`, `kept`) and changes nothing.
+- Changed: the "Tracking work (o-lane)" setup note (claude-md, codex-agents) tells agents to archive only whole finished trees with `mtm lane archive --finished-trees` (dry run first) and never to delete.
+
 ## v0.2.1 (2026-11-08)
 
 - Fixed: the "Tracking work (o-lane)" setup notes (`setup.json` claude-md and codex-agents), the README and a verb help text told agents to run `mtm lane status done --id ID` and `mtm lane status`, which answer "command not found" (the short spelling reaches operations, not prop-shaped requests). They now give the one-call form `mtm lane set ID status=VALUE reason="..."`; the test asserts the old spelling is absent.

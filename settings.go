@@ -7,14 +7,30 @@ import (
 	"ofam.dev/ochazuke"
 )
 
-const defaultStatuses = `[{"name":"planned","tone":"dim","open":true},` +
+// defaultStatuses give every status but planned its own tone (planned has
+// none: the default colour). running and done use ochazuke's state tones; the
+// others are the lane.* tones of statusTones. A user overrides any of it by
+// editing lanes.statuses (another tone name) or the tone's row in themes.json.
+const defaultStatuses = `[{"name":"planned","open":true},` +
 	`{"name":"running","tone":"state.working","starts":true,"open":true,"description":"Someone is working on this now."},` +
-	`{"name":"parked","tone":"dim","open":true,"description":"Paused on purpose: nobody is working on it until someone picks it up again."},` +
-	`{"name":"review","tone":"accent","open":true,"description":"The work is finished and waits for review before it merges."},` +
-	`{"name":"merged","tone":"state.done","ends":true,"description":"The work is merged into main; it may still need a release or an install."},` +
+	`{"name":"parked","tone":"lane.parked","open":true,"description":"Paused on purpose: nobody is working on it until someone picks it up again."},` +
+	`{"name":"review","tone":"lane.review","open":true,"description":"The work is finished and waits for review before it merges."},` +
+	`{"name":"merged","tone":"lane.merged","ends":true,"description":"The work is merged into main; it may still need a release or an install."},` +
 	`{"name":"done","tone":"state.done","ends":true,"description":"Finished: shipped, delivered or answered."},` +
-	`{"name":"cancelled","tone":"dim","ends":true,"description":"Stopped without finishing; kept for the record."},` +
-	`{"name":"archived","tone":"dim","archive":true,"description":"Put away: kept with its history but hidden from the default views. Restore returns it to the status it had."}]`
+	`{"name":"cancelled","tone":"lane.cancelled","ends":true,"description":"Stopped without finishing; kept for the record."},` +
+	`{"name":"archived","tone":"lane.archived","archive":true,"description":"Put away: kept with its history but hidden from the default views. Restore returns it to the status it had."}]`
+
+// statusTones are the tone rows o-lane declares for the default statuses
+// (Appearance.SetTone), laid under every themes.json entry so a theme still
+// recolours them. Each is light then dark, chosen to read on both and to
+// differ from the state tones (running blue, done green) and from each other.
+var statusTones = map[string]ochazuke.ToneStyle{
+	"lane.parked":    {Fg: ochazuke.SchemeColor{Light: "#C2570C", Dark: "#FF9E5E"}},
+	"lane.review":    {Fg: ochazuke.SchemeColor{Light: "#6F42C1", Dark: "#B392F0"}},
+	"lane.merged":    {Fg: ochazuke.SchemeColor{Light: "#00796B", Dark: "#4DD0C0"}, Bold: true},
+	"lane.cancelled": {Fg: ochazuke.SchemeColor{Light: "#B0386A", Dark: "#F08DB4"}},
+	"lane.archived":  {Fg: ochazuke.SchemeColor{Light: "muted", Dark: "muted"}, Dim: true},
+}
 
 const defaultLiveStatuses = `{"working":{"working":true,"name":"working","tone":"state.working","glyph":"●"},"needs_input":{"working":true,"name":"needs input","tone":"state.needs-input","glyph":"?"},"errored":{"name":"errored","tone":"state.errored","glyph":"✗"},"done":{"name":"done","tone":"state.done","glyph":"✓"},"idle":{"name":"idle","tone":"state.idle","glyph":"○"},"closed":{"name":"closed","tone":"state.exited","glyph":"×"},"missing":{"name":"missing","tone":"dim","glyph":"·"},"none":{"name":"shell"},"":{"name":"shell"}}`
 
@@ -68,6 +84,7 @@ func appSettings() []ochazuke.Setting {
 		{"lanes.durations", true, "Show derived durations"}, {"lanes.hide-closed-roots", false, "Hide closed roots"}, {"lanes.pane-column", true, "Show pane column"}, {"lanes.history-in-detail", true, "Show history"}, {"lanes.live", true, "Read live pane status"}, {"lanes.agent-live", true, "Read live status of associated agents from lanes.agent-harnesses data"}, {"lanes.live-tones", true, "Colour live status"},
 		{"lanes.group-by-project", true, "Group page roots by project, unassociated last"}, {"lanes.project-column", true, "Show the project column"}, {"lanes.name-tone", true, "Draw the lane name in the same tone as its status cell"},
 		{"lanes.pane-one-lane", true, "A pane belongs to one lane: associating it with a lane removes it from the others, and only its latest lane shows its live status; false lets lanes share panes"},
+		{"lanes.rollup-counts", true, "Show done/total beside a lane whose subtree is not all complete (complete: a status with ends in lanes.statuses)"},
 		{"lanes.stale-flag", true, "Flag working lifecycle statuses with no working participant; requires live reads"},
 		{"lanes.status-descriptions", true, "Show the focused lane's status description and reason in the detail; changes apply on the next page mount"},
 	} {

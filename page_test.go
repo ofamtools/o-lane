@@ -192,7 +192,7 @@ func TestPageProjection(t *testing.T) {
 	if rows[1].Parent != rows[0].ID || rows[2].Parent != rows[1].ID {
 		t.Fatal(rows)
 	}
-	if rows[0].Cells[1] != "planned" || rows[2].Cells[1] != "running" || rows[2].Cells[5] != "1h 30m" || rows[2].Cells[6] != "reviewer" {
+	if rows[0].Cells[1] != "planned · 0/2" || rows[2].Cells[1] != "running" || rows[2].Cells[5] != "1h 30m" || rows[2].Cells[6] != "reviewer" {
 		t.Fatal(rows)
 	}
 	if rows[2].Tones[0].Tone != ochazuke.ToneWorking {

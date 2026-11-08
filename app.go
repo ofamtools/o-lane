@@ -216,11 +216,18 @@ func (a *App) specs() []verbSpec {
 		{"lane", "delete", "Hide a lane and subtree for good; undo restores them. Agents archive instead (lane archive, or lane set ID status=archived)", common(nil), []string{"target"}, false, ochazuke.AgentNever, (*App).runLaneDelete, nil, false},
 		{"lane", "undo", "Restore the latest change; agents can undo their own latest change", nil, nil, false, "", (*App).runLaneUndo, nil, false},
 	}
+	finishedParams := map[string]ochazuke.Parameter{
+		"finished-trees": {Type: "boolean", Description: "Collection scope: archive every root tree whose lanes are all complete (a status with ends or the archive role); partly complete trees stay untouched. Takes no target"},
+		"dry-run":        {Type: "boolean", Description: "With --finished-trees: list the trees that would be archived and change nothing"},
+	}
 	for _, v := range []struct {
 		name, desc string
 		run        func(*App, *call) ochazuke.Result
-	}{{"park", "Park", (*App).runLanePreset}, {"merge", "Record merge and optional commit", (*App).runLaneMerge}, {"finish", "Mark done", (*App).runLanePreset}, {"cancel", "Cancel", (*App).runLanePreset}, {"reopen", "Reopen as planned", (*App).runLanePreset}, {"archive", "Archive: hide from the default views, keep the record; restore undoes it", (*App).runLanePreset}} {
-		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}), []string{"target"}, false, "", v.run, nil, false})
+		extra      map[string]ochazuke.Parameter
+	}{{"park", "Park", (*App).runLanePreset, nil}, {"merge", "Record merge and optional commit", (*App).runLaneMerge, nil}, {"finish", "Mark done", (*App).runLanePreset, nil}, {"cancel", "Cancel", (*App).runLanePreset, nil}, {"reopen", "Reopen as planned", (*App).runLanePreset, nil}, {"archive", "Archive: hide from the default views, keep the record; restore undoes it. With --finished-trees, archive every fully complete root tree", (*App).runLaneArchive, finishedParams}} {
+		params := map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}
+		maps.Copy(params, v.extra)
+		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(params), []string{"target"}, false, "", v.run, nil, false})
 	}
 	for _, v := range []struct {
 		name   string

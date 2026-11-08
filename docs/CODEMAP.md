@@ -18,6 +18,7 @@
 - `changes.go`: atomic define/add, domain mutations, status presets, shared association handler (moving a pane off its other lanes unless `lanes.pane-one-lane` is off), cycle refusal and undoable subtree delete.
 - `store.go`: process lock, per-root documents, transaction recovery, snapshots and actor-safe undo with append-only audit receipts.
 - `atomic.go`: private synced temporary writes, rename and directory sync (adapted from o-questions).
+- `rollup.go`: subtree `done/total` counts (`rollups`) and `lane archive --finished-trees` (`finishedRoots`, `ArchiveFinished`); `rollup_test.go` covers it and the distinct default status tones (`statusTones` in `settings.go`).
 - `backup.go`: daily private tar/gzip archives and retention (adapted from o-questions).
 - `stale.go`, `stale_test.go`: read-only stale projection from lifecycle `starts` and current participants on each lane and descendants whose lifecycle rows have `starts:true`, conservative unknown evidence, activity metadata, CLI filter, saved/typed filters, opt-outs and timestamp checks; `lanes/stale`, `lanes/stale-off`, `lanes/stale-working-descendant` and `lanes/stale-needs-input` stories capture list/detail, opt-out, deep working descendants and waiting agents.
 - `pane_prefix_test.go`: association/start/reverse-verb prefix canonicalization and record-first fallback, undo, legacy live-prefix matching, ambiguity, exact-ID priority, status-change timestamps and reader notifications when prefix uniqueness changes.

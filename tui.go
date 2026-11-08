@@ -51,6 +51,9 @@ func mountPage(a *App) (*page, error) {
 	}
 	m := ochazuke.NewModel(a.r)
 	m.Title = "o-lane"
+	for name, style := range statusTones {
+		m.Appearance.SetTone(name, style)
+	}
 	v, e := ocli.MountPage(m, doc, spec, ocli.PageConfig{})
 	if e != nil {
 		return nil, e
@@ -75,7 +78,7 @@ func mountPage(a *App) (*page, error) {
 			a.r.UI().Status(err.Error())
 		}
 	}
-	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.status-tones", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.stale-flag", "lanes.live-tones", "lanes.live-statuses", "lanes.live-precedence", "lanes.live-roles", "lanes.project-filter", "lanes.status-filter"} {
+	for _, name := range []string{"lanes.durations", "lanes.hide-closed-roots", "lanes.pane-column", "lanes.status-tones", "lanes.rollup-counts", "lanes.history-in-detail", "lanes.detail", "lanes.live", "lanes.stale-flag", "lanes.live-tones", "lanes.live-statuses", "lanes.live-precedence", "lanes.live-roles", "lanes.project-filter", "lanes.status-filter"} {
 		a.r.Settings().Observe(name, func(string, any) { p.dirty = true })
 	}
 	a.showUI = func(q View) error {

@@ -40,7 +40,7 @@ func TestSetupInstructionNote(t *testing.T) {
 		if strings.Count(text, "<!-- o-lane:begin -->") != 1 || !strings.Contains(text, "## Tracking work (o-lane)") || !strings.Contains(text, "`lane.lane define`") {
 			t.Fatalf("%s:\n%s", p, text)
 		}
-		for _, want := range []string{"`lane.lane set`", "`md.doc new`", "`mtm lane set ID status=VALUE reason=", "reason=", "mtm lane define", "mtm lane plan define", "mtm lane list --status running", "`lane.lane associate`", "`lane.lane annotate`", "`lane.lane list`", "`lane.plan define`"} {
+		for _, want := range []string{"`lane.lane set`", "`md.doc new`", "`mtm lane set ID status=VALUE reason=", "reason=", "mtm lane define", "mtm lane plan define", "mtm lane list --status running", "`lane.lane associate`", "`lane.lane annotate`", "`lane.lane list`", "`lane.plan define`", "`mtm lane archive --finished-trees`", "--dry-run", "never delete"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("%s misses %s:\n%s", p, want, text)
 			}
