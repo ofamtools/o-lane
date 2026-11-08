@@ -32,3 +32,5 @@ binding	lane/normal n -> lane.note	lane/normal n -> lane.annotate
 catalog	lane.states choices source	status prop Enum	parameter Source lane.states removed
 story	lanes/state-change, state-description(-off), state-filter-setting, filter-state	lanes/status-change, status-description(-off), status-filter-setting, filter-status	
 go	Lane.State, View.RolledState, StateDescription, StateReason, State (row type), Store.State/Note/Copy, LiveState	Status, RolledStatus, StatusDescription, StatusReason, Status, Store.Status/Annotate/Duplicate, LiveStatus	tuios JSON keys agent_state, agent_state_at and the tuios event field state are external and unchanged
+prop	(added) reason	lane.lane.set {status, reason}	one multi-prop set records the status and its note together (replaces state --note)
+verb	lane.lane.state --note TEXT	lane.lane.set ID status=X reason=TEXT	

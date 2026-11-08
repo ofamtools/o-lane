@@ -30,9 +30,10 @@ plan.go	parseImportColumns	compare	"wording"	1
 plan.go	parsePlan	compare	"depends"	1
 plan.go	parsePlan	compare	"name"	3
 plan.go	parsePlan	cyclo	"-"	33
-props.go	App.declareProps	compare	"archived"	1
 props.go	App.declareProps	compare	"depends"	1
-props.go	App.declareProps	compare	"status"	1	the status prop writes a status change; the archived prop beside it is the same kind of row
+props.go	App.patchLane	compare	"archived"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
+props.go	App.patchLane	compare	"reason"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
+props.go	App.patchLane	compare	"status"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
 props.go	App.refreshOpenFilter	compare	"open"	1
 props.go	App.refreshStatusEnum	compare	"status"	1	the status prop and the status filter parameters take the configured lanes.statuses names as choices
 props.go	archiveFlag	case	"on"	1

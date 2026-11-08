@@ -281,3 +281,31 @@ func TestLaneRightsCatalog(t *testing.T) {
 		t.Fatal("missing catalog rows", wants)
 	}
 }
+
+// One set carries the status and its reason: one write, one history entry,
+// and the reason shows where the status reason shows.
+func TestSetStatusWithReasonInOneCall(t *testing.T) {
+	f := newCLI(t)
+	f.lane("add", "Work")
+	q := f.lane("set", "Work", "status=review", "reason=branch X")
+	if q["status"] != "review" {
+		t.Fatal(q)
+	}
+	shown := f.lane("show", "Work")
+	if shown["status_reason"] != "branch X" {
+		t.Fatalf("reason: %v", shown["status_reason"])
+	}
+	n := 0
+	for _, h := range shown["history"].([]any) {
+		if h.(map[string]any)["kind"] == "status" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("want one status entry, got %d", n)
+	}
+	f.lane("set", "Work", "status", "done")
+	if f.lane("show", "Work")["status_reason"] == "branch X" {
+		t.Fatal("a status change without a reason keeps the old reason")
+	}
+}

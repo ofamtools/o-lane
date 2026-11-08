@@ -18,6 +18,11 @@ const archiveProp = "archived"
 // statusProp is the lane prop that holds the lifecycle status.
 const statusProp = "status"
 
+// reasonProp is the lane prop that holds why the lane is in its status: the
+// note of the latest status change. Written in the same set as a status (or
+// archived) change it is that change's note; written alone it appends a note.
+const reasonProp = "reason"
+
 func (a *App) declareProps() {
 	props := []ochazuke.PropSpec{{Name: "id", Parameter: ochazuke.Parameter{Type: "string"}, Key: true}}
 	for _, name := range editable {
@@ -36,6 +41,7 @@ func (a *App) declareProps() {
 	// done, lane set status=done); its Enum is lanes.statuses, kept in step
 	// by refreshStatusEnum.
 	props = append(props, ochazuke.PropSpec{Name: statusProp, Parameter: ochazuke.Parameter{Type: ochazuke.SettingString, Enum: statusNames(a.store.statusRows()), Description: "Lifecycle status (a lanes.statuses row); writing it records a status change in the lane's history"}})
+	props = append(props, ochazuke.PropSpec{Name: reasonProp, Parameter: ochazuke.Parameter{Type: ochazuke.SettingString, Description: "Why the lane is in its status (the latest status change's note); set it with the status in one write: lane set ID status=review reason=\"branch X\""}})
 	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.statusRows()), ochazuke.SavedFilter{Name: "stale", Noun: "lane", Conditions: []ochazuke.PropFilter{{Prop: "stale", Value: true}}})
 	a.r.Define("lane").Store(ochazuke.Store{Kind: ochazuke.KindCollection,
 		Get: func(c ochazuke.Ctx, id string) (ochazuke.Thing, error) {
@@ -49,6 +55,7 @@ func (a *App) declareProps() {
 			t, e := ochazuke.ThingOf(q)
 			if e == nil {
 				t[archiveProp] = a.store.statuses()[q.Status].Archive
+				t[reasonProp] = statusReason(q.History)
 			}
 			return t, e
 		},
@@ -57,40 +64,7 @@ func (a *App) declareProps() {
 				return nil, e
 			}
 			a.bindActor(c)
-			q, e := a.store.mutate("set", id, func(q *Lane, _ *[]Lane) error {
-				keys := make([]string, 0, len(changes))
-				for key := range changes {
-					keys = append(keys, key)
-				}
-				slices.Sort(keys)
-				edited := false
-				for _, key := range keys {
-					if key == statusProp {
-						if e := a.store.status(q, fmt.Sprint(changes[key]), ""); e != nil {
-							return e
-						}
-						continue
-					}
-					if key == archiveProp {
-						on, e := archiveFlag(changes[key])
-						if e != nil {
-							return e
-						}
-						if e = a.store.setArchived(q, on, ""); e != nil {
-							return e
-						}
-						continue
-					}
-					if e := setSpec(&q.Spec, key, changes[key]); e != nil {
-						return e
-					}
-					edited = true
-				}
-				if edited {
-					a.store.entry(q, "edit", "", "", "set", nil, nil)
-				}
-				return nil
-			})
+			q, e := a.store.mutate("set", id, func(q *Lane, _ *[]Lane) error { return a.patchLane(q, changes) })
 			if e != nil {
 				return nil, e
 			}
@@ -100,6 +74,7 @@ func (a *App) declareProps() {
 			t, e := ochazuke.ThingOf(q)
 			if e == nil {
 				t[archiveProp] = a.store.statuses()[q.Status].Archive
+				t[reasonProp] = statusReason(q.History)
 			}
 			return t, e
 		},
@@ -221,4 +196,53 @@ func archiveFlag(v any) (bool, error) {
 		}
 	}
 	return false, fmt.Errorf("%s: expected true or false", archiveProp)
+}
+
+// patchLane applies one set to a lane: the props in key order, with the
+// reason as the note of the status (or archived) change in the same write.
+func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error {
+	keys := make([]string, 0, len(changes))
+	for key := range changes {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	edited := false
+	reason, hasReason := "", false
+	if v, ok := changes[reasonProp]; ok && v != nil {
+		reason, hasReason = fmt.Sprint(v), true
+	}
+	for _, key := range keys {
+		if key == reasonProp {
+			continue
+		}
+		if key == statusProp {
+			if e := a.store.status(q, fmt.Sprint(changes[key]), reason); e != nil {
+				return e
+			}
+			hasReason = false
+			continue
+		}
+		if key == archiveProp {
+			on, e := archiveFlag(changes[key])
+			if e != nil {
+				return e
+			}
+			if e = a.store.setArchived(q, on, reason); e != nil {
+				return e
+			}
+			hasReason = false
+			continue
+		}
+		if e := setSpec(&q.Spec, key, changes[key]); e != nil {
+			return e
+		}
+		edited = true
+	}
+	if hasReason && strings.TrimSpace(reason) != "" {
+		a.store.entry(q, "note", "", "", reason, nil, nil)
+	}
+	if edited {
+		a.store.entry(q, "edit", "", "", "set", nil, nil)
+	}
+	return nil
 }
