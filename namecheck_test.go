@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"ofam.dev/ochazuke/lexiconcheck"
 	"ofam.dev/ochazuke/namecheck"
 	"ofam.dev/ochazuke/nouncheck"
 )
@@ -50,4 +51,21 @@ func TestNouns(t *testing.T) {
 		t.Fatal(err)
 	}
 	nouncheck.Check(t, a.r, nouncheck.Config{Baseline: "testdata/nouncheck.txt"})
+}
+
+// TestLexicon holds the registered operations to the lexicon's naming rules.
+// The known violations are testdata/lexiconcheck.txt, which only shrinks
+// (LEXICONCHECK_UPDATE=1 drops rows that no longer apply);
+// testdata/lexicon-words.tsv is a copy of the family word list.
+func TestLexicon(t *testing.T) {
+	a, err := newApp(fixture(t), strings.NewReader(""), io.Discard, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lexiconcheck.Check(t, lexiconcheck.Config{
+		Operations: &a.r.Operations,
+		Words:      "testdata/lexicon-words.tsv",
+		Baseline:   "testdata/lexiconcheck.txt",
+		MainNouns:  map[string]string{Namespace: "lane"},
+	})
 }

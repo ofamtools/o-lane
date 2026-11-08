@@ -82,6 +82,7 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	if e = a.r.DeclareSetting(appSettings()...); e != nil {
 		return nil, e
 	}
+	a.r.Define("lane").Main() // the tool's main noun: `o-lane add` is `lane add`
 	a.declareProps()
 	for _, spec := range a.specs() {
 		v := spec

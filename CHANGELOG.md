@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Changed (LX7b, lexicon): requires ochazuke v0.103.0. The tool declares its main noun, `lane` (`Noun.Main()`), so the reader resolves `o-lane add`, `o-lane state`, `o-lane define` and `o-lane list --state running` to `lane add|state|define|list`. New `TestLexicon` (`lexiconcheck`, `MainNouns: lane`) over `testdata/lexiconcheck.txt`, seeded with today's violations.
+- Changed (LX7b): the "Tracking work (o-lane)" setup note drops the doubled word in the mtm CLI spellings: `mtm lane state`, `mtm lane define`, `mtm lane associate`, `mtm lane list --state running`, `mtm lane plan define` (were `mtm lane lane ...`). The MCP names (`lane.lane define|add|state|associate|note|list`, `lane.plan define`) are unchanged. README examples use the short spellings.
 - Upgrade ochazuke to v0.102.0, oden to v0.3.0 and monogatari to v0.6.0 (the Operations registry and three-part keys; `cmd/opname` moved the code). o-lane declares its namespace, `lane` (`ochazuke.DeclareNamespace`), so its keys are `lane.lane.<verb>` and the catalog carries `namespace: lane`. CLI spellings are unchanged.
 
 - Dispatch verbs from the spec table: each row names its own `run` method (`verbs.go`) and the `App.handle` switch is gone. `lane.choose-state` is now an alias of `lane.state` (one operation, the Lanes page `s` row resolves to `lane.state`); `lane.state`'s `state` parameter is required with the `lane.states` choices, and `--from-tag` covers it, so `lane state LANE --from-tag TAG` is unchanged. `lane.choose-pane` stays its own verb. The namecheck baseline lost 49 rows.

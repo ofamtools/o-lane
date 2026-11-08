@@ -27,20 +27,20 @@ mtm extension register lane      # mounts the Lanes page and the lane.* verbs in
 ## Usage
 
 ```sh
-o lane lane define --project app --lanes '[{"name":"readme"},{"name":"logo","parent":"readme"}]'
-o lane lane start logo                     # planned -> running
-o lane lane associate logo --pane WINDOW_ID
-o lane lane note logo "logo C picked"
-o lane lane state logo review
-o lane lane finish logo
-o lane lane rows --format table            # the page's columns
-o lane lane tree --state running,review    # JSON; matches keep their ancestors
+o lane define --project app --lanes '[{"name":"readme"},{"name":"logo","parent":"readme"}]'
+o lane start logo                     # planned -> running
+o lane associate logo --pane WINDOW_ID
+o lane note logo "logo C picked"
+o lane state logo review
+o lane finish logo
+o lane rows --format table            # the page's columns
+o lane tree --state running,review    # JSON; matches keep their ancestors
 o lane                                     # the Lanes page
-o lane lane --help                         # every verb and its parameters
+o lane --help                         # every verb and its parameters
 ```
 
 ```text
-$ o lane lane rows --format table          # a review lane with no pane associated
+$ o lane rows --format table          # a review lane with no pane associated
 Name    State                  Project  Repo  Estimate  Elapsed / duration  Panes         Agents
 readme  review · unassociated  app                                          unassociated
 logo    review · unassociated  app                      <1m                 unassociated
@@ -52,7 +52,7 @@ Every answer is JSON unless `--format` asks for a table. Add `--data DIR` to try
 
 The `lane` noun supports add, define, list, tree, show, history, set, get, rename, reword, move, copy, start, state, park, review, merge, finish, cancel, reopen, archive, restore, note, link, unlink, associate, unassociate, live, focus-pane, yank-id, yank-path, delete and undo. Discover parameters in the schema-1 catalog or noun help. `set` and `get` use the framework's standard typed-property grammar, including multi-property writes. `pane.associate`, `pane.unassociate` and `pane.lanes` expose the reverse relation using the same association handler; `agent.associate`, `agent.unassociate`, `agent.lanes`, `agent.live` and `agent.list` do the same for harness sub-agents (see Agents).
 
-Every lane belongs to a project. A project is a reference only, an id or name with an optional host kind (`mtm:<id>`, `o-lane`); o-lane keeps no project store and does not need mtm. A lane's own `project` wins; otherwise it inherits the nearest ancestor's, so a root's project covers its subtree. Answers include `effective_project`, `project_from` and `project_association` (associated, inherited or unassociated). A missing project records the lane as unassociated and is never refused, but agents should always set one: `o lane lane define --project PROJECT --lanes '[...]'` (the batch's top lanes take it), `lane add --project`, `plan define PATH --project` (the root takes it), or `set PROJECT` later. `lane associate --project P` and `lane unassociate --project P` share the relation handler with `project associate P LANE` / `project unassociate P LANE`; associating a root sets the project for its subtree, which is also how existing records migrate. A pane and project in one associate call share one undo. `lane list --project P`, `lane tree --project P`, `lane rows --project P` and `project lanes P` filter by effective project; a reference without a kind matches the same id or name under any kind. `project list` lists recorded references and, when `lanes.project-source` is `mtm` (the default when `mtm` is on PATH, else `none`), the names `mtm project list` returns through the injectable runner. That source is used only for completion (`project.choices` backs every project form field, free text allowed) and listing; it never validates writes.
+Every lane belongs to a project. A project is a reference only, an id or name with an optional host kind (`mtm:<id>`, `o-lane`); o-lane keeps no project store and does not need mtm. A lane's own `project` wins; otherwise it inherits the nearest ancestor's, so a root's project covers its subtree. Answers include `effective_project`, `project_from` and `project_association` (associated, inherited or unassociated). A missing project records the lane as unassociated and is never refused, but agents should always set one: `o lane define --project PROJECT --lanes '[...]'` (the batch's top lanes take it), `lane add --project`, `plan define PATH --project` (the root takes it), or `set PROJECT` later. `lane associate --project P` and `lane unassociate --project P` share the relation handler with `project associate P LANE` / `project unassociate P LANE`; associating a root sets the project for its subtree, which is also how existing records migrate. A pane and project in one associate call share one undo. `lane list --project P`, `lane tree --project P`, `lane rows --project P` and `project lanes P` filter by effective project; a reference without a kind matches the same id or name under any kind. `project list` lists recorded references and, when `lanes.project-source` is `mtm` (the default when `mtm` is on PATH, else `none`), the names `mtm project list` returns through the injectable runner. That source is used only for completion (`project.choices` backs every project form field, free text allowed) and listing; it never validates writes.
 
 ## Defining lanes from JSON and plans
 
@@ -82,7 +82,7 @@ Use `lane list --stale` in the CLI, or `z /` with `stale = true` and the default
 
 ## Agents (subagents inside one pane)
 
-Lanes are often run by harness sub-agents, several inside one pane (Claude Code subagents today; Codex or omp sub-agents are new data rows). Associate a lane with the agent, not only its pane: `o lane lane associate LANE --agent-id ID --harness claude-code [--agent-session S] [--agent ofam-lane] [--role R]`. `agent associate ID LANE`, `agent unassociate ID LANE` and `agent lanes ID` are the agent-side view of the same relation and share its handler; `lane unassociate LANE --agent-id ID` removes it. A participant that names an agent is keyed by harness and agent id (re-associating updates it), so an agent and the pane it runs in can both be recorded. The Claude Code agent id is the `agentId` the Agent tool reports (also the `agent-<id>.jsonl` transcript name). Agent ids must be simple (letters, digits, `_ . -`). Undo restores agent relations like any other change.
+Lanes are often run by harness sub-agents, several inside one pane (Claude Code subagents today; Codex or omp sub-agents are new data rows). Associate a lane with the agent, not only its pane: `o lane associate LANE --agent-id ID --harness claude-code [--agent-session S] [--agent ofam-lane] [--role R]`. `agent associate ID LANE`, `agent unassociate ID LANE` and `agent lanes ID` are the agent-side view of the same relation and share its handler; `lane unassociate LANE --agent-id ID` removes it. A participant that names an agent is keyed by harness and agent id (re-associating updates it), so an agent and the pane it runs in can both be recorded. The Claude Code agent id is the `agentId` the Agent tool reports (also the `agent-<id>.jsonl` transcript name). Agent ids must be simple (letters, digits, `_ . -`). Undo restores agent relations like any other change.
 
 Agent live state is derived from data, never stored: `lanes.agent-harnesses` maps a harness name to a row with `transcripts` (path templates; `{agent}` and `{session}` are substituted, `{session}` is `*` when unknown, then `~`, `$VAR` and `${VAR:-default}` expand and the result is globbed), `time_field` (the RFC 3339 field of a transcript line; empty uses the file's modification time), optional `idle`, `events` (hook event name to `start`/`stop`) and `fields` (hook payload field names for event, agent, session, type, transcript). The default row reads Claude Code's `${CLAUDE_CONFIG_DIR:-~/.claude}/projects/*/<session>/subagents/agent-<id>.jsonl`. States are:
 
