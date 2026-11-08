@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 (2026-11-08)
 
 - Changed: every default status but `planned` has its own colour (the `tone` in `lanes.statuses`): planned none (default colour), running `state.working` (blue), parked `lane.parked` (orange), review `lane.review` (violet), merged `lane.merged` (teal, bold), done `state.done` (green), cancelled `lane.cancelled` (rose), archived `lane.archived` (muted, dim). merged and done no longer share a tone. The `lane.*` rows are declared with `Appearance.SetTone` (light and dark colours) and are overridden in `themes.json` `tones`, or by naming another tone in `lanes.statuses`; test `TestDefaultStatusTonesAreDistinct`. Existing `lanes.statuses` saved in settings.json keep their own tones.
 - Added: a lane with unfinished work below it shows `done/total` after its status on the Lanes page (`3/5`; all descendants, archived ones excluded; done is a status with `ends: true`). Rows carry `children_done` and `children_total`. Setting `lanes.rollup-counts` (default true) turns it off.
