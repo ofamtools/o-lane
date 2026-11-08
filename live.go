@@ -179,14 +179,14 @@ func (a *App) resolvePane(p Pane) Pane {
 	if p.Window == "" || p.Session == "" {
 		return p
 	}
-	snap := snapshotScopes(context.Background(), []Pane{p}, a.run)[scopeOf(p)]
+	snap := snapshotScopes(context.Background(), []Pane{p}, a.run, a.paneCommands())[scopeOf(p)]
 	if id, ok := snap.windowID(p.Window); snap.err == nil && ok {
 		p.Window = id
 	}
 	return p
 }
 
-func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liveSnapshots {
+func snapshotScopes(parent context.Context, panes []Pane, run commandRunner, cmds paneCommands) liveSnapshots {
 	out := liveSnapshots{}
 	for _, p := range panes {
 		if p.Window == "" {
@@ -205,7 +205,7 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 				session = p.Host + ":" + session
 			}
 			ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-			b, err := run(ctx, []string{"tuios", "list-windows", "--json", "-s", session})
+			b, err := run(ctx, expand(cmds.Panes, "{session}", session))
 			cancel()
 			snap.err = err
 			if err == nil {
@@ -312,13 +312,13 @@ func (a *App) live(q Lane) (Live, error) {
 	if err != nil {
 		return Live{}, err
 	}
-	return readLive(context.Background(), panes, o, a.run)
+	return readLive(context.Background(), panes, o, a.run, a.paneCommands())
 }
-func readLive(ctx context.Context, panes []Pane, o liveOptions, run commandRunner) (Live, error) {
+func readLive(ctx context.Context, panes []Pane, o liveOptions, run commandRunner, cmds paneCommands) (Live, error) {
 	if !o.on {
 		return aggregateLive(nil, o, nil), nil
 	}
-	return aggregateLive(panes, o, snapshotScopes(ctx, panes, run)), nil
+	return aggregateLive(panes, o, snapshotScopes(ctx, panes, run, cmds)), nil
 }
 func (a *App) liveResult(_ ochazuke.Ctx, q Lane) ochazuke.Result {
 	v, err := a.live(q)
@@ -337,9 +337,9 @@ func (a *App) focusPane(c ochazuke.Ctx, q Lane, role string) ochazuke.Result {
 		return done(nil, e)
 	}
 	argv := append([]string{}, a.r.Settings().Strings("lanes.pane-open")...)
-	run := a.run
+	run, cmds := a.run, a.paneCommands()
 	return ochazuke.Pending(func(ctx context.Context) (any, error) {
-		live, e := readLive(ctx, panes, o, run)
+		live, e := readLive(ctx, panes, o, run, cmds)
 		if e != nil {
 			return nil, e
 		}
@@ -399,7 +399,7 @@ func (a *App) enrichLive(views []View) error {
 	for _, v := range views {
 		panes = append(panes, a.store.panesInSubtree(rows, v.Lane)...)
 	}
-	snapshots := snapshotScopes(context.Background(), panes, a.run)
+	snapshots := snapshotScopes(context.Background(), panes, a.run, a.paneCommands())
 	for i := range views {
 		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
 		views[i].Live = &v

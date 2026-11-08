@@ -11,6 +11,7 @@ import (
 
 func fixture(t *testing.T) string {
 	t.Helper()
+	useTuiosPaneCommands(t)
 	base := t.TempDir()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")

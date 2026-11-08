@@ -23,14 +23,14 @@ func (a *App) registerPage() error {
 	target.Noun = "lane"
 	target.From = ochazuke.SourceRow + ":id"
 	// choose-pane is its own verb: its pane argument is a pane choice ID, not a window label.
-	a.r.DefineOwn("lane").Verb("choose-pane", a.handler(verbSpec{name: "choose-pane", run: (*App).runLaneChoosePane}), "Choose a tuios window to associate").Agent(ochazuke.AgentAllow).Positional("target", "pane")
+	a.r.DefineOwn("lane").Verb("choose-pane", a.handler(verbSpec{name: "choose-pane", run: (*App).runLaneChoosePane}), "Choose a pane window to associate").Agent(ochazuke.AgentAllow).Positional("target", "pane")
 	op := a.r.Operations.At("lane.choose-pane")
-	op.Parameters = map[string]ochazuke.Parameter{"target": target, "pane": {Type: "string", Required: true, Free: true, Source: "pane.choices", Description: "Choose a tuios window to associate"}, // A window closing after the pick never loses the relation.
+	op.Parameters = map[string]ochazuke.Parameter{"target": target, "pane": {Type: "string", Required: true, Free: true, Source: "pane.choices", Description: "Choose a pane window to associate"}, // A window closing after the pick never loses the relation.
 		"role": {Type: "string", Source: "pane.roles", Description: "Participant role; default implementer"}}
 	a.r.Operations.Set(op)
 	a.r.DefineOwn("pane").Verb("choices", func(c ochazuke.Ctx) ochazuke.Result {
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return a.paneChoices(ctx) }).Replacing("pane-choices")
-	}, "List tuios windows with explicit session references").Fetch().Quiet().Agent(ochazuke.AgentAllow)
+	}, "List pane windows with explicit session references").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	a.r.DefineOwn("project").Verb("choices", func(c ochazuke.Ctx) ochazuke.Result {
 		if e := a.configure(); e != nil {
 			return done(nil, e)
@@ -59,8 +59,8 @@ func (a *App) registerPage() error {
 			if !listHides {
 				o.listHides, _ = c.Args["archived"].(bool)
 			}
-			reader, run := a.reader, commandRunner(a.run)
-			return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
+			reader, run, cmds := a.reader, commandRunner(a.run), a.paneCommands()
+			return ochazuke.Pending(func(ctx context.Context) (any, error) { return loadLaneRows(ctx, &s, o, reader, run, cmds) }).Replacing("lane-rows").Then(func(_ ochazuke.Ctx, value any, e error) {
 				if a.rowsLoaded != nil {
 					rows, _ := value.([]ocli.Row)
 					a.rowsLoaded(rows, e)
@@ -191,7 +191,7 @@ func allPanes(rows []Lane) []Pane {
 	}
 	return panes
 }
-func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveReader, run commandRunner) ([]ocli.Row, error) {
+func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveReader, run commandRunner, cmds paneCommands) ([]ocli.Row, error) {
 	rows, err := s.List()
 	if err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 		if reader != nil {
 			snapshots = reader.current(panes)
 		} else {
-			snapshots = snapshotScopes(ctx, panes, run)
+			snapshots = snapshotScopes(ctx, panes, run, cmds)
 		}
 		o.liveRows = map[string]Live{}
 		o.staleLiveRows = map[string]Live{}
@@ -529,12 +529,13 @@ func humanDuration(d time.Duration) string {
 func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
-	b, e := a.run(ctx, []string{"tuios", "list-sessions", "--json"})
+	cmds := a.paneCommands()
+	b, e := a.run(ctx, cmds.Sessions)
 	if noServer(e) {
-		// No tuios server is running: there are no windows to choose, which
+		// No pane server is running: there are no windows to choose, which
 		// is an answer and not a failure of the job.
 		if a.errOut != nil {
-			fmt.Fprintln(a.errOut, "o-lane: no tuios server is running, so there are no panes to choose; start tuios (or run inside a tuios session) and try again")
+			fmt.Fprintln(a.errOut, "o-lane: no pane server is running, so there are no panes to choose; start one (or run inside an mtm session) and try again")
 		}
 		return []ochazuke.Choice{}, nil
 	}
@@ -544,7 +545,7 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 	sessions, e := decodeTuiosList[struct {
 		Name string `json:"name"`
 		ID   string `json:"id"`
-	}](b, "sessions")
+	}](b, "sessions", "items")
 	if e != nil {
 		return nil, e
 	}
@@ -557,7 +558,7 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 		if name == "" {
 			continue
 		}
-		b, e = a.run(ctx, []string{"tuios", "list-windows", "--json", "-s", name})
+		b, e = a.run(ctx, expand(cmds.Panes, "{session}", name))
 		if noServer(e) {
 			break
 		}

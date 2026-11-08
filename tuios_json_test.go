@@ -94,7 +94,7 @@ func TestLiveSnapshotsTuiosShapes(t *testing.T) {
 					return []byte(`{"windows":[{"window_id":"fixture-window","agent_state":"working"}]}`), nil
 				}
 				return tuiosSample(t, "list-windows", shape), nil
-			})
+			}, tuiosPaneCommands())
 			for _, want := range []struct{ session, status string }{{"hub", "idle"}, {"other", "working"}} {
 				snap := snapshots[liveScope{Session: want.session}]
 				if snap.err != nil || snap.windows["fixture-window"] != want.status {

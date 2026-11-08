@@ -171,7 +171,7 @@ func TestLiveSnapshotsAndCLI(t *testing.T) {
 			return nil, errors.New("offline")
 		}
 		return []byte(`{"windows":[{"window_id":"w1","agent_state":"working"}]}`), nil
-	})
+	}, tuiosPaneCommands())
 	if len(calls) != 3 || calls[0] != "tuios list-windows --json -s remote:s" {
 		t.Fatal(calls)
 	}
@@ -195,7 +195,7 @@ func TestLivePageOptOuts(t *testing.T) {
 	if err := a.r.Settings().Set("lanes.status-tone-scope", "cell"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestLivePageOptOuts(t *testing.T) {
 		if err := a.r.Settings().Set("lanes.live-tones", tone); err != nil {
 			t.Fatal(err)
 		}
-		rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+		rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -225,7 +225,7 @@ func TestLivePageOptOuts(t *testing.T) {
 	if _, err := a.store.Status(q.ID, "done", ""); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestLivePageOptOuts(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.run = func(context.Context, []string) ([]byte, error) { t.Fatal("live off ran tuios"); return nil, nil }
-	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestLiveReaderRecordedStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	panes := []Pane{{Session: "s", Window: "w1", Role: "implementer"}, {Session: "s", Window: "w2", Role: "reviewer"}}
-	r := newLiveReader(production.run, panes, liveSnapshots{})
+	r := newLiveReader(production.run, tuiosPaneCommands(), panes, liveSnapshots{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); r.Run(ctx) }()
@@ -456,7 +456,7 @@ func TestLiveReaderBootGap(t *testing.T) {
 		}
 		<-ctx.Done()
 		return nil, ctx.Err()
-	}, panes, liveSnapshots{})
+	}, tuiosPaneCommands(), panes, liveSnapshots{})
 	done := make(chan struct{})
 	go func() { defer close(done); r.Run(ctx) }()
 	defer func() { cancel(); <-done }()
@@ -474,7 +474,7 @@ func TestLiveReaderScopeIsolation(t *testing.T) {
 	for _, p := range panes {
 		snapshots[scopeOf(p)] = liveSnapshot{windows: map[string]string{"w": "idle"}}
 	}
-	r := newLiveReader(nil, panes, snapshots)
+	r := newLiveReader(nil, tuiosPaneCommands(), panes, snapshots)
 	r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", Status: "needs_input"})
 	got := r.current(panes)
 	if got[liveScope{Session: "s"}].windows["w"] != "idle" || got[liveScope{Session: "other"}].windows["w"] != "idle" || got[liveScope{Host: "remote", Session: "s"}].windows["w"] != "needs_input" {

@@ -669,7 +669,7 @@ func TestPagePaneChoicesNoServer(t *testing.T) {
 	if e != nil || len(choices) != 0 || choices == nil {
 		t.Fatalf("no server: %v, %v", choices, e)
 	}
-	if !strings.Contains(stderr.String(), "no tuios server is running") {
+	if !strings.Contains(stderr.String(), "no pane server is running") {
 		t.Fatalf("explanation: %q", stderr.String())
 	}
 	a.run = func(context.Context, []string) ([]byte, error) { return nil, exit(1, "boom") }
@@ -700,6 +700,7 @@ func TestRunnerExitStatus(t *testing.T) {
 // without a running server does, reproduced with the real binary in a
 // temporary HOME) gives an empty choice list through the default runner.
 func TestPagePaneChoicesNoServerProcess(t *testing.T) {
+	useTuiosPaneCommands(t)
 	bin := t.TempDir()
 	script := "#!/bin/sh\necho '[]'\nexit 3\n"
 	if e := os.WriteFile(filepath.Join(bin, "tuios"), []byte(script), 0o755); e != nil {
@@ -712,7 +713,7 @@ func TestPagePaneChoicesNoServerProcess(t *testing.T) {
 		t.Fatal(e)
 	}
 	choices, e := app.paneChoices(context.Background())
-	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no tuios server") {
+	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no pane server") {
 		t.Fatalf("%v %v %q", choices, e, stderr.String())
 	}
 }

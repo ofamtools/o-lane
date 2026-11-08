@@ -67,7 +67,7 @@ func mountPage(a *App) (*page, error) {
 			return nil, err
 		}
 		panes := allPanes(lanes)
-		a.reader = newLiveReader(a.run, panes, snapshotScopes(context.Background(), panes, a.run))
+		a.reader = newLiveReader(a.run, a.paneCommands(), panes, snapshotScopes(context.Background(), panes, a.run, a.paneCommands()))
 	}
 	a.changed = func() { p.dirty = true }
 	a.rowsLoaded = func(rows []ocli.Row, err error) {
@@ -100,7 +100,7 @@ func mountPage(a *App) (*page, error) {
 	if e = a.r.OpenPage(pageID); e != nil {
 		return nil, e
 	}
-	rows, e := loadLaneRows(context.Background(), a.store, a.pageOptions(), a.reader, a.run)
+	rows, e := loadLaneRows(context.Background(), a.store, a.pageOptions(), a.reader, a.run, a.paneCommands())
 	if e != nil {
 		return nil, e
 	}
@@ -160,7 +160,7 @@ func (p *page) syncLive() tea.Cmd {
 	p.readerContext = ctx
 	reader := p.a.reader
 	if reader == nil {
-		reader = newLiveReader(p.a.run, nil, liveSnapshots{})
+		reader = newLiveReader(p.a.run, p.a.paneCommands(), nil, liveSnapshots{})
 		p.a.reader = reader
 	}
 	previous := p.liveDone
