@@ -1,0 +1,34 @@
+kind	old	new	note
+verb	lane.lane.state	lane.lane.set {prop: status}	the status is a prop; CLI: lane status done --id ID, lane set ID status done; MCP: lane.lane.set {prop: status, value}
+alias	lane.lane.choose-state	lane.lane.set {prop: status}	the Lanes page s row binds lane.set with prop=status; the value is asked from the prop's choices
+verb	lane.lane.state --from-tag TAG	lane.lane.tag TAG	watcher tags map through lanes.tag-statuses; an unmapped tag appends a note
+verb	lane.lane.states	lane.lane.get {prop: status} (Enum)	the status prop's Enum is the configured lanes.statuses names; the choices source lane.states is gone
+verb	lane.lane.review	lane.lane.set {prop: status, value: review}	review is a noun; the status review replaces the verb
+verb	lane.lane.copy	lane.lane.duplicate	alias dup; no alias for copy
+verb	lane.lane.note	lane.lane.annotate	history entry kind note is unchanged
+setting	lanes.states	lanes.statuses	
+setting	lanes.state-presets	lanes.status-presets	the review preset row is gone with the review verb
+setting	lanes.tag-states	lanes.tag-statuses	
+setting	lanes.state-filter	lanes.status-filter	
+setting	lanes.state-tones	lanes.status-tones	
+setting	lanes.state-descriptions	lanes.status-descriptions	
+setting	lanes.live-states	lanes.live-statuses	maps tuios agent_state values; the tuios field names are unchanged
+setting	list.hide-archived	collection.hide-archived	ochazuke v0.104 renamed the list.* settings
+setting	list.filters	collection.filters	ochazuke v0.104
+setting	list.filter-layout	collection.filter-layout	ochazuke v0.104 (stories)
+param	--state (lane list, tree, rows, page-rows, project lanes)	--status	
+param	state (lane.state)	tag / value of the status prop	
+prop	state	status	the lane prop is writable and holds the lifecycle status
+prop	rolled_state	rolled_status	
+prop	live_state	live_status	
+json	lane.state	lane.status	stored lane files: read old key, written back as status on the next write
+json	history[].kind = state	history[].kind = status	stored history: read old kind, written back as status
+json	state_description / state_reason / state_about	status_description / status_reason / status_about	
+json	rolled_state / live_state	rolled_status / live_status	view fields
+json	live.state / live_state / state_since	live.status / live_status / status_since	pane and agent live status in answers
+json	agent live row state	status	agent list and agent live rows
+binding	lane/normal s -> lane.choose-state	lane/normal s -> lane.set {prop: status}	
+binding	lane/normal n -> lane.note	lane/normal n -> lane.annotate	
+catalog	lane.states choices source	status prop Enum	parameter Source lane.states removed
+story	lanes/state-change, state-description(-off), state-filter-setting, filter-state	lanes/status-change, status-description(-off), status-filter-setting, filter-status	
+go	Lane.State, View.RolledState, StateDescription, StateReason, State (row type), Store.State/Note/Copy, LiveState	Status, RolledStatus, StatusDescription, StatusReason, Status, Store.Status/Annotate/Duplicate, LiveStatus	tuios JSON keys agent_state, agent_state_at and the tuios event field state are external and unchanged

@@ -1,5 +1,5 @@
 {
-  "name": "lanes/state-change",
+  "name": "lanes/status-change",
   "app": "o-lane",
   "width": 140,
   "height": 38,
@@ -23,7 +23,7 @@
     "enter",
     {
       "job": "lane.page-rows",
-      "state": "done"
+      "status": "done"
     },
     "j"
   ],
@@ -31,8 +31,8 @@
     {
       "after": 1,
       "contains": [
-        "Run lane.choose-state",
-        "state"
+        "Run lane.choose-status",
+        "status"
       ]
     },
     {

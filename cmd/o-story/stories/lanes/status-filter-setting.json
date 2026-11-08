@@ -1,10 +1,12 @@
 {
-  "name": "lanes/filter-state",
+  "name": "lanes/status-filter-setting",
   "app": "o-lane",
   "width": 160,
   "height": 42,
   "values": {
-    "list.filter-layout": "fields"
+    "lanes.status-filter": [
+      "running"
+    ]
   },
   "seed": {
     "lanes": [
@@ -26,41 +28,12 @@
     "start": "Build step"
   },
   "script": [
-    "z",
-    "/",
-    ":",
-    {
-      "type": "focus to list-filter-form/status"
-    },
-    "enter",
-    "l",
-    "space",
-    "esc"
+    "k",
+    "j"
   ],
   "expect": [
     {
       "after": 1,
-      "contains": [
-        "Other root",
-        "Release root",
-        "Build step",
-        "Docs step"
-      ]
-    },
-    {
-      "after": 5,
-      "modal": "list-filter-form",
-      "contains": [
-        "status · is",
-        "○ running"
-      ]
-    },
-    {
-      "after": 8,
-      "modal": "",
-      "contains": [
-        "[status = running]"
-      ],
       "order": [
         "Release root",
         "Build step"
@@ -68,7 +41,12 @@
       "lacks": [
         "Other root",
         "Docs step"
-      ]
+      ],
+      "highlightedText": "Release root"
+    },
+    {
+      "after": 2,
+      "highlightedText": "Build step"
     }
   ]
 }

@@ -15,7 +15,7 @@
     "ctrl+space",
     {
       "job": "pane.choices",
-      "state": "done"
+      "status": "done"
     },
     {
       "type": "Worker"
@@ -24,7 +24,7 @@
     "enter",
     {
       "job": "lane.page-rows",
-      "state": "done"
+      "status": "done"
     }
   ],
   "expect": [

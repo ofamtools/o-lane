@@ -5,7 +5,7 @@
   "height": 46,
   "seed": {
     "lanes": [{"name":"Parent"}, {"name":"Child","parent":"Parent"}, {"name":"Worker","parent":"Child"}],
-    "states": [{"lane":"Parent","state":"running"}, {"lane":"Child","state":"running"}, {"lane":"Worker","state":"running"}],
+    "statuses": [{"lane":"Parent","status":"running"}, {"lane":"Child","status":"running"}, {"lane":"Worker","status":"running"}],
     "associations": [{"lane":"Worker","pane":{"session":"fixture-session","window":"working-window","role":"implementer"}}],
     "live_windows": [{"window_id":"working-window","agent_state":"working"}]
   },

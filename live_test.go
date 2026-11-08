@@ -26,7 +26,7 @@ func TestLiveNestedAggregate(t *testing.T) {
 	f.lane("add", "leaf", "--parent", "branch")
 	f.lane("associate", "branch", "w1", "--session", "s")
 	f.lane("associate", "leaf", "w2", "--session", "s", "--role", "reviewer")
-	if got := f.lane("live", "branch")["state"]; got != "needs input" {
+	if got := f.lane("live", "branch")["status"]; got != "needs input" {
 		t.Fatalf("nested aggregate: %v", got)
 	}
 }
@@ -52,7 +52,7 @@ func TestLivePageCell(t *testing.T) {
 }
 
 func TestLiveAggregateTable(t *testing.T) {
-	mapping, err := parseLiveStates(defaultLiveStates)
+	mapping, err := parseLiveStatuses(defaultLiveStatuses)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,20 +86,20 @@ func TestLiveAggregateTable(t *testing.T) {
 			opts := o
 			opts.roles = tc.filter
 			got := aggregateLive(panes, opts, liveSnapshots{{Session: "s"}: snap})
-			if got.State != tc.want || got.Tone != tc.tone || len(got.Panes) != 2 {
+			if got.Status != tc.want || got.Tone != tc.tone || len(got.Panes) != 2 {
 				t.Fatalf("%+v", got)
 			}
 		})
 	}
 	panes := []Pane{{Session: "s", Window: "w", Role: "reviewer"}}
-	if got := aggregateLive(panes, o, nil); got.State != "unknown" {
+	if got := aggregateLive(panes, o, nil); got.Status != "unknown" {
 		t.Fatal(got)
 	}
-	if got := aggregateLive(nil, o, nil); got.State != "unassociated" {
+	if got := aggregateLive(nil, o, nil); got.Status != "unassociated" {
 		t.Fatal(got)
 	}
 	o.on = false
-	if got := aggregateLive(panes, o, nil); got.State != "off" || len(got.Panes) != 0 {
+	if got := aggregateLive(panes, o, nil); got.Status != "off" || len(got.Panes) != 0 {
 		t.Fatal(got)
 	}
 }
@@ -109,29 +109,29 @@ func TestLiveSettingsData(t *testing.T) {
 	f.lane("associate", "root", "w1", "--session", "s")
 	f.lane("associate", "root", "w2", "--session", "s", "--role", "watcher")
 	settings := f.a.r.Settings()
-	if err := settings.Set("lanes.live-states", `{"working":{"name":"busy","tone":"accent","glyph":"!"},"needs_input":{"name":"waiting","tone":"error","glyph":"?"}}`); err != nil {
+	if err := settings.Set("lanes.live-statuses", `{"working":{"name":"busy","tone":"accent","glyph":"!"},"needs_input":{"name":"waiting","tone":"error","glyph":"?"}}`); err != nil {
 		t.Fatal(err)
 	}
 	if err := settings.Set("lanes.live-precedence", []string{"busy", "waiting"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.lane("live", "root"); got["state"] != "busy" || got["tone"] != "accent" || got["glyph"] != "!" {
+	if got := f.lane("live", "root"); got["status"] != "busy" || got["tone"] != "accent" || got["glyph"] != "!" {
 		t.Fatal(got)
 	}
 	if err := settings.Set("lanes.live-roles", []string{"watcher"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.lane("live", "root"); got["state"] != "waiting" || len(got["panes"].([]any)) != 2 {
+	if got := f.lane("live", "root"); got["status"] != "waiting" || len(got["panes"].([]any)) != 2 {
 		t.Fatal(got)
 	}
-	if err := settings.Set("lanes.live-states", `{"working":"busy","needs_input":"waiting"}`); err != nil {
+	if err := settings.Set("lanes.live-statuses", `{"working":"busy","needs_input":"waiting"}`); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.lane("live", "root"); got["state"] != "waiting" {
+	if got := f.lane("live", "root"); got["status"] != "waiting" {
 		t.Fatal(got)
 	}
 	for _, bad := range []string{`null`, `[]`, `{"working":{}}`, `{"working":7}`} {
-		if err := settings.Set("lanes.live-states", bad); err == nil {
+		if err := settings.Set("lanes.live-statuses", bad); err == nil {
 			t.Fatalf("accepted %s", bad)
 		}
 	}
@@ -152,11 +152,11 @@ func TestLiveSnapshotsAndCLI(t *testing.T) {
 		t.Fatalf("not shared: %v", *f.calls)
 	}
 	for _, row := range tree {
-		if row.(map[string]any)["live"].(map[string]any)["state"] != "needs input" {
+		if row.(map[string]any)["live"].(map[string]any)["status"] != "needs input" {
 			t.Fatal(tree)
 		}
 	}
-	if got := f.lane("show", "root")["live"].(map[string]any)["state"]; got != "needs input" {
+	if got := f.lane("show", "root")["live"].(map[string]any)["status"]; got != "needs input" {
 		t.Fatal(got)
 	}
 	after, err := f.a.store.List()
@@ -177,7 +177,7 @@ func TestLiveSnapshotsAndCLI(t *testing.T) {
 	}
 	o, _ := f.a.liveOptions()
 	got := aggregateLive(panes, o, snaps)
-	if got.Panes[0].State != "unknown" || got.Panes[0].Error == "" || got.Panes[1].State != "working" || got.Panes[2].State != "working" || got.Panes[3].State != "unknown" {
+	if got.Panes[0].Status != "unknown" || got.Panes[0].Error == "" || got.Panes[1].Status != "working" || got.Panes[2].Status != "working" || got.Panes[3].Status != "unknown" {
 		t.Fatal(got)
 	}
 }
@@ -206,7 +206,7 @@ func TestLivePageOptOuts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// The name cell's tone follows whichever tone draws the state cell.
+		// The name cell's tone follows whichever tone draws the status cell.
 		want, name := 2, ochazuke.ToneWorking
 		if tone {
 			want, name = 4, ochazuke.ToneNeedsInput
@@ -218,7 +218,7 @@ func TestLivePageOptOuts(t *testing.T) {
 			t.Fatal(rows)
 		}
 	}
-	if _, err := a.store.State(q.ID, "done", ""); err != nil {
+	if _, err := a.store.Status(q.ID, "done", ""); err != nil {
 		t.Fatal(err)
 	}
 	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
@@ -277,7 +277,7 @@ func waitLive(t *testing.T, r *liveReader, predicate func(liveSnapshots) bool) {
 		select {
 		case <-r.changed:
 		case <-timer.C:
-			t.Fatal("reader did not reach expected state")
+			t.Fatal("reader did not reach expected status")
 		}
 	}
 }
@@ -330,7 +330,7 @@ func TestLiveReaderRecordedStream(t *testing.T) {
 	})
 	o, _ := a.liveOptions()
 	got := aggregateLive(panes, o, r.current(panes))
-	if got.State != "working" || got.Panes[1].State != "closed" {
+	if got.Status != "working" || got.Panes[1].Status != "closed" {
 		t.Fatal(got)
 	}
 	if err = os.WriteFile(filepath.Join(dir, "close-all"), []byte("close"), 0600); err != nil {
@@ -340,7 +340,7 @@ func TestLiveReaderRecordedStream(t *testing.T) {
 		snap := s[liveScope{Session: "s"}]
 		return len(snap.windows) == 0 && snap.err == nil
 	})
-	if got := aggregateLive(panes, o, r.current(panes)); got.State != "closed" || len(got.Panes) != 2 {
+	if got := aggregateLive(panes, o, r.current(panes)); got.Status != "closed" || len(got.Panes) != 2 {
 		t.Fatal(got)
 	}
 	cancel()
@@ -471,7 +471,7 @@ func TestLiveReaderScopeIsolation(t *testing.T) {
 		snapshots[scopeOf(p)] = liveSnapshot{windows: map[string]string{"w": "idle"}}
 	}
 	r := newLiveReader(nil, panes, snapshots)
-	r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", State: "needs_input"})
+	r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", Status: "needs_input"})
 	got := r.current(panes)
 	if got[liveScope{Session: "s"}].windows["w"] != "idle" || got[liveScope{Session: "other"}].windows["w"] != "idle" || got[liveScope{Host: "remote", Session: "s"}].windows["w"] != "needs_input" {
 		t.Fatal(got)
@@ -479,7 +479,7 @@ func TestLiveReaderScopeIsolation(t *testing.T) {
 	r.mu.Lock()
 	r.snapshots[liveScope{Host: "remote", Session: "s"}] = liveSnapshot{windows: map[string]string{}, err: errors.New("offline")}
 	r.mu.Unlock()
-	if !r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", State: "working"}) {
+	if !r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", Status: "working"}) {
 		t.Fatal("recovering scope did not request a snapshot")
 	}
 }

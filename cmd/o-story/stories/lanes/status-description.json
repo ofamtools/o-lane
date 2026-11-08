@@ -1,5 +1,5 @@
 {
-  "name": "lanes/state-description-off",
+  "name": "lanes/status-description",
   "app": "o-lane",
   "width": 140,
   "height": 38,
@@ -12,10 +12,10 @@
         "name": "Paused"
       }
     ],
-    "states": [
+    "statuses": [
       {
         "lane": "Paused",
-        "state": "parked",
+        "status": "parked",
         "note": "waiting on owner"
       }
     ]
@@ -26,19 +26,21 @@
   ],
   "expect": [
     {
+      "after": 1,
+      "highlightedText": "Fresh",
+      "lacks": [
+        "Paused on purpose",
+        "Note:"
+      ]
+    },
+    {
       "after": 2,
       "highlightedText": "Paused",
       "contains": [
-        "parked"
-      ],
-      "lacks": [
-        "Paused on purpose",
+        "parked — Paused on purpose",
         "Note: waiting on owner"
       ]
     }
   ],
-  "values": {
-    "lanes.state-descriptions": false
-  },
   "theme": "dark"
 }

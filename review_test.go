@@ -57,7 +57,7 @@ func TestCLIReviewAgentRunIdentity(t *testing.T) {
 			t.Fatal(e)
 		}
 		s.Actor = a
-		if _, e = s.Note(q.ID, "run a"); e != nil {
+		if _, e = s.Annotate(q.ID, "run a"); e != nil {
 			t.Fatal(e)
 		}
 		t.Setenv(kind.key, "run-b")
@@ -85,7 +85,7 @@ func TestCLIReviewAgentRunIdentity(t *testing.T) {
 	if anonymous.Name != "" {
 		t.Fatalf("anonymous name: %+v", anonymous)
 	}
-	if _, e = s.Note(q.ID, "anonymous"); e != nil {
+	if _, e = s.Annotate(q.ID, "anonymous"); e != nil {
 		t.Fatal(e)
 	}
 	if e = s.Undo(); e == nil {
@@ -112,7 +112,7 @@ func TestStoreUndoKeepsAudit(t *testing.T) {
 	s := testStore(t)
 	q := mustAdd(t, s, Spec{Name: "root"})
 	s.Actor = Actor{Kind: "agent", Name: "author", Harness: "test"}
-	if _, e := s.State(q.ID, "running", "started"); e != nil {
+	if _, e := s.Status(q.ID, "running", "started"); e != nil {
 		t.Fatal(e)
 	}
 	before := mustResolve(t, s, q.ID)
@@ -121,14 +121,14 @@ func TestStoreUndoKeepsAudit(t *testing.T) {
 		t.Fatal(e)
 	}
 	after := mustResolve(t, s, q.ID)
-	if after.State != "planned" || len(after.History) != len(before.History)+1 || !reflect.DeepEqual(after.History[:len(before.History)], before.History) {
+	if after.Status != "planned" || len(after.History) != len(before.History)+1 || !reflect.DeepEqual(after.History[:len(before.History)], before.History) {
 		t.Fatalf("audit was rewritten: %+v", after)
 	}
 	b, _ := json.Marshal(after.History[len(after.History)-1])
 	var en map[string]any
 	_ = json.Unmarshal(b, &en)
 	undo, ok := en["undo"].(map[string]any)
-	if !ok || en["kind"] != "undo" || undo["action"] != "state" {
+	if !ok || en["kind"] != "undo" || undo["action"] != "set" {
 		t.Fatal(string(b))
 	}
 	if undo["original_actor"].(map[string]any)["name"] != "author" || en["by"].(map[string]any)["name"] != "undoer" {
@@ -140,7 +140,7 @@ func TestStoreUndoKeepsAudit(t *testing.T) {
 	if v := s.view(after, []Lane{after}); v.Started != nil {
 		t.Fatal("undone start still effective")
 	}
-	if _, e := s.Note(q.ID, "keep note"); e != nil {
+	if _, e := s.Annotate(q.ID, "keep note"); e != nil {
 		t.Fatal(e)
 	}
 	if e := s.Undo(); e != nil {
@@ -159,25 +159,25 @@ func TestStoreUndoKeepsAudit(t *testing.T) {
 }
 func TestCLIReviewPresetData(t *testing.T) {
 	f := newCLI(t)
-	states := `[{"name":"queued","open":true},{"name":"active","starts":true,"open":true},{"name":"waiting","open":true},{"name":"checking","open":true},{"name":"integrated","ends":true},{"name":"released","ends":true},{"name":"abandoned","ends":true}]`
-	if _, e := f.a.r.Settings().SetSession("lanes.states", states); e != nil {
+	statuses := `[{"name":"queued","open":true},{"name":"active","starts":true,"open":true},{"name":"waiting","open":true},{"name":"checking","open":true},{"name":"integrated","ends":true},{"name":"released","ends":true},{"name":"abandoned","ends":true}]`
+	if _, e := f.a.r.Settings().SetSession("lanes.statuses", statuses); e != nil {
 		t.Fatal(e)
 	}
-	presets := `{"start":"active","park":"waiting","review":"checking","merge":"integrated","finish":"released","cancel":"abandoned","reopen":"queued"}`
-	if _, e := f.a.r.Settings().SetSession("lanes.state-presets", presets); e != nil {
+	presets := `{"start":"active","park":"waiting","merge":"integrated","finish":"released","cancel":"abandoned","reopen":"queued"}`
+	if _, e := f.a.r.Settings().SetSession("lanes.status-presets", presets); e != nil {
 		t.Fatal(e)
 	}
 	f.lane("add", "custom")
-	for _, tc := range []struct{ verb, state string }{{"start", "active"}, {"park", "waiting"}, {"review", "checking"}, {"merge", "integrated"}, {"finish", "released"}, {"cancel", "abandoned"}, {"reopen", "queued"}} {
-		if q := f.lane(tc.verb, "custom"); q["state"] != tc.state {
+	for _, tc := range []struct{ verb, status string }{{"start", "active"}, {"park", "waiting"}, {"merge", "integrated"}, {"finish", "released"}, {"cancel", "abandoned"}, {"reopen", "queued"}} {
+		if q := f.lane(tc.verb, "custom"); q["status"] != tc.status {
 			t.Fatal(tc, q)
 		}
 	}
-	if _, e := f.a.r.Settings().SetSession("lanes.state-presets", `{"start":"missing"}`); e != nil {
+	if _, e := f.a.r.Settings().SetSession("lanes.status-presets", `{"start":"missing"}`); e != nil {
 		t.Fatal(e)
 	}
-	f.fail("lanes.state-presets", "lane", "start", "custom")
-	f.fail("lanes.state-presets", "lane", "finish", "custom")
+	f.fail("lanes.status-presets", "lane", "start", "custom")
+	f.fail("lanes.status-presets", "lane", "finish", "custom")
 }
 func TestCLIReviewDataPermissions(t *testing.T) {
 	dir := fixture(t)
@@ -231,13 +231,13 @@ func TestCLIPaneMatchSymmetry(t *testing.T) {
 func TestStoreReopenClearsFinished(t *testing.T) {
 	s := testStore(t)
 	q := mustAdd(t, s, Spec{Name: "root"})
-	if _, e := s.State(q.ID, "done", ""); e != nil {
+	if _, e := s.Status(q.ID, "done", ""); e != nil {
 		t.Fatal(e)
 	}
 	if v := s.view(mustResolve(t, s, q.ID), nil); v.Finished == nil {
 		t.Fatal("not finished")
 	}
-	if _, e := s.State(q.ID, "running", ""); e != nil {
+	if _, e := s.Status(q.ID, "running", ""); e != nil {
 		t.Fatal(e)
 	}
 	if v := s.view(mustResolve(t, s, q.ID), nil); v.Finished != nil {
@@ -280,7 +280,7 @@ func TestCLIListDeletedAudit(t *testing.T) {
 func TestStoreUndoAuditRecovery(t *testing.T) {
 	s := testStore(t)
 	mustAdd(t, s, Spec{Name: "root"})
-	if _, e := s.Note("root", "survives undo"); e != nil {
+	if _, e := s.Annotate("root", "survives undo"); e != nil {
 		t.Fatal(e)
 	}
 	// Read the legacy snapshot format too (no affected-entry receipt).

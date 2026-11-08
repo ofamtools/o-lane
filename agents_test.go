@@ -88,7 +88,7 @@ func writeTranscript(t *testing.T, home, session, agent string, at time.Time) st
 	return path
 }
 
-func TestAgentStateFromTranscript(t *testing.T) {
+func TestAgentStatusFromTranscript(t *testing.T) {
 	home := t.TempDir()
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	rows, err := parseAgentHarnesses(defaultAgentHarnesses)
@@ -116,21 +116,21 @@ func TestAgentStateFromTranscript(t *testing.T) {
 		{"unknown harness is missing", Pane{Harness: "nope", AgentID: "aworking"}, nil, "missing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := readAgent(tc.pane, o, tc.info); got.State != tc.want {
+			if got := readAgent(tc.pane, o, tc.info); got.Status != tc.want {
 				t.Fatalf("got %+v, want %s", got, tc.want)
 			}
 		})
 	}
 	// Zero idle never idles; the per-harness row overrides the setting.
 	o.idle = 0
-	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.State != "working" {
+	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.Status != "working" {
 		t.Fatalf("zero idle: %+v", got)
 	}
 	row := rows["claude-code"]
 	row.Idle = "30m"
 	o.harnesses = map[string]harnessRow{"claude-code": row}
 	o.idle = time.Minute
-	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.State != "working" || got.Activity == nil || !got.Activity.Equal(now.Add(-10*time.Minute)) {
+	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.Status != "working" || got.Activity == nil || !got.Activity.Equal(now.Add(-10*time.Minute)) {
 		t.Fatalf("row idle override: %+v", got)
 	}
 	// Without a time field the modification time is the activity.
@@ -138,7 +138,7 @@ func TestAgentStateFromTranscript(t *testing.T) {
 	o.harnesses = map[string]harnessRow{"claude-code": row}
 	o.now = time.Now()
 	o.idle = time.Hour
-	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.State != "working" {
+	if got := readAgent(Pane{AgentID: "aidle"}, o, nil); got.Status != "working" {
 		t.Fatalf("mtime activity: %+v", got)
 	}
 	// CLAUDE_CONFIG_DIR moves the transcript root, as it does in Claude Code.
@@ -150,7 +150,7 @@ func TestAgentStateFromTranscript(t *testing.T) {
 		}
 		return ""
 	}}
-	if got := readAgent(Pane{AgentID: "amoved"}, o, nil); got.State != "working" {
+	if got := readAgent(Pane{AgentID: "amoved"}, o, nil); got.Status != "working" {
 		t.Fatalf("CLAUDE_CONFIG_DIR: %+v", got)
 	}
 }
@@ -177,7 +177,7 @@ func TestAgentLiveThroughApp(t *testing.T) {
 	}
 	q, _ := a.store.Resolve("Impl")
 	live, err := a.live(q)
-	if err != nil || live.State != "working" || len(live.Panes) != 1 || live.Panes[0].AgentLive == nil {
+	if err != nil || live.Status != "working" || len(live.Panes) != 1 || live.Panes[0].AgentLive == nil {
 		t.Fatalf("live: %v %+v", err, live)
 	}
 	// A recorded stop wins; the log is read incrementally on the next refresh.
@@ -185,21 +185,21 @@ func TestAgentLiveThroughApp(t *testing.T) {
 	if err = a.recordHook([]string{"claude-code"}, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if live, _ = a.live(q); live.State != "done" {
+	if live, _ = a.live(q); live.Status != "done" {
 		t.Fatalf("after stop: %+v", live)
 	}
 	a.in = strings.NewReader(`{"session_id":"sess-1","hook_event_name":"SubagentStart","agent_id":"a1"}`)
 	if err = a.recordHook([]string{"claude-code"}, time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if live, _ = a.live(q); live.State != "working" {
+	if live, _ = a.live(q); live.Status != "working" {
 		t.Fatalf("teammate restart: %+v", live)
 	}
 	// lanes.agent-live off leaves agent participants unread.
 	if err = a.r.Settings().Set("lanes.agent-live", false); err != nil {
 		t.Fatal(err)
 	}
-	if live, _ = a.live(q); live.State != "unassociated" || live.Panes[0].AgentLive != nil {
+	if live, _ = a.live(q); live.Status != "unassociated" || live.Panes[0].AgentLive != nil {
 		t.Fatalf("agent-live off: %+v", live)
 	}
 	if err = a.r.Settings().Set("lanes.agent-harnesses", `{"x":{"events":{"A":"begin"},"fields":{"agent":"id"}}}`); err == nil {
@@ -273,7 +273,7 @@ func TestAgentHookPayloads(t *testing.T) {
 		t.Fatalf("stuck stdin: %v after %v", err, time.Since(start))
 	}
 	var agents []AgentStatus
-	if err = json.Unmarshal([]byte(mustMain(t, dir, "agent", "list")), &agents); err != nil || len(agents) != 4 || agents[0].Agent != "a9" || agents[0].State != "done" {
+	if err = json.Unmarshal([]byte(mustMain(t, dir, "agent", "list")), &agents); err != nil || len(agents) != 4 || agents[0].Agent != "a9" || agents[0].Status != "done" {
 		t.Fatalf("agent list: %v %+v", err, agents)
 	}
 }
@@ -354,11 +354,11 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	if err := os.WriteFile(settings, []byte(tuiosHooks), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if out := mustMain(t, dir, "setup", "status", "--home", home); !strings.Contains(out, "claude-subagent-start: missing") || !strings.Contains(out, "claude-subagent-stop: missing") || !strings.Contains(out, "claude-md: missing") || !strings.Contains(out, "codex-agents: missing") {
+	if out := mustMain(t, dir, "setup", "check", "--home", home); !strings.Contains(out, "claude-subagent-start: missing") || !strings.Contains(out, "claude-subagent-stop: missing") || !strings.Contains(out, "claude-md: missing") || !strings.Contains(out, "codex-agents: missing") {
 		t.Fatalf("status: %s", out)
 	}
 	// The plan is a dry run: it shows the resulting file and writes nothing.
-	plan := mustMain(t, dir, "setup", "plan", "--home", home)
+	plan := mustMain(t, dir, "setup", "install", "--dry-run", "--home", home)
 	if resolved, err := filepath.EvalSymlinks(filepath.Dir(settings)); err == nil {
 		settings = filepath.Join(resolved, "settings.json")
 	}
@@ -387,7 +387,7 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	if again, _ := os.ReadFile(settings); !bytes.Equal(first, again) {
 		t.Fatalf("second install changed the file:\n%s", again)
 	}
-	if out := mustMain(t, dir, "setup", "status", "--home", home); !strings.Contains(out, "everything is set up") {
+	if out := mustMain(t, dir, "setup", "check", "--home", home); !strings.Contains(out, "everything is set up") {
 		t.Fatalf("status after install: %s", out)
 	}
 	mustMain(t, dir, "setup", "uninstall", "--yes", "--home", home)
@@ -398,7 +398,7 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	}
 	// No Claude Code directory: the items are not applicable, nothing written.
 	empty := t.TempDir()
-	if out := mustMain(t, dir, "setup", "status", "--home", empty); !strings.Contains(out, "n/a") {
+	if out := mustMain(t, dir, "setup", "check", "--home", empty); !strings.Contains(out, "n/a") {
 		t.Fatalf("no claude dir: %s", out)
 	}
 	if _, err := os.Stat(filepath.Join(empty, ".claude")); err == nil {

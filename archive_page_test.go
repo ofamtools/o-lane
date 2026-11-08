@@ -25,7 +25,7 @@ func archivePage(t *testing.T) (*App, *page) {
 	a := pageFixture(t)
 	seedPage(t, a, json.RawMessage(archivePageSeed))
 	for _, name := range []string{"Old", "Gone"} {
-		if _, e := a.store.State(name, "archived", ""); e != nil {
+		if _, e := a.store.Status(name, "archived", ""); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -61,7 +61,7 @@ func reloadPage(t *testing.T, p *page) {
 	p.m.View()
 }
 
-func filterIsArchived(l *ochazuke.List) bool {
+func filterIsArchived(l *ochazuke.Collection) bool {
 	return slices.ContainsFunc(l.PropFilters(), func(f ochazuke.PropFilter) bool { return f.Prop == archiveProp })
 }
 
@@ -121,7 +121,7 @@ func TestPageArchivedFilterReveals(t *testing.T) {
 
 func TestPageArchivedHidingSetting(t *testing.T) {
 	a, p := archivePage(t)
-	if _, e := a.r.Settings().SetSession("list.hide-archived", false); e != nil {
+	if _, e := a.r.Settings().SetSession("collection.hide-archived", false); e != nil {
 		t.Fatal(e)
 	}
 	p.m.View()
@@ -132,29 +132,29 @@ func TestPageArchivedHidingSetting(t *testing.T) {
 	}
 }
 
-// TestPageStateFilterNamesArchive: a lanes.state-filter naming an archive
-// state shows those lanes on the page without a prop filter.
-func TestPageStateFilterNamesArchive(t *testing.T) {
+// TestPageStatusFilterNamesArchive: a lanes.status-filter naming an archive
+// status shows those lanes on the page without a prop filter.
+func TestPageStatusFilterNamesArchive(t *testing.T) {
 	a, p := archivePage(t)
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"archived"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"archived"}); e != nil {
 		t.Fatal(e)
 	}
 	reloadPage(t, p)
 	if !hasLane(p, "Old") || !hasLane(p, "Gone") || hasLane(p, "Release") {
-		t.Fatalf("state-filter archived:\n%s", frameText(p))
+		t.Fatalf("status-filter archived:\n%s", frameText(p))
 	}
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"planned"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"planned"}); e != nil {
 		t.Fatal(e)
 	}
 	reloadPage(t, p)
 	if hasLane(p, "Old") || !hasLane(p, "Release") {
-		t.Fatalf("state-filter planned:\n%s", frameText(p))
+		t.Fatalf("status-filter planned:\n%s", frameText(p))
 	}
 }
 
 // TestRowsArchivedParameter: the portable feed leaves archived lanes out
-// unless asked (archived=true, which the page passes); a state naming an
-// archive state still returns them.
+// unless asked (archived=true, which the page passes); a status naming an
+// archive status still returns them.
 func TestRowsArchivedParameter(t *testing.T) {
 	f := newCLI(t)
 	f.a.store.BackupDaily = false

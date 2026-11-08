@@ -19,7 +19,7 @@ import (
 
 // Agent participants are lanes' relations to a harness's sub-agent (a Claude
 // Code subagent, later Codex or omp ones) rather than to a tuios pane. Their
-// live state is derived from data only: lanes.agent-harnesses rows say where a
+// live status is derived from data only: lanes.agent-harnesses rows say where a
 // harness writes an agent's transcript, which line field holds its time and
 // which hook events start and stop it. Nothing here branches on a harness name.
 
@@ -221,13 +221,13 @@ func (a *App) agentLog() *agentLog {
 	return a.agents
 }
 
-// AgentStatus is an agent participant's derived live state. Nothing is stored.
+// AgentStatus is an agent participant's derived live status. Nothing is stored.
 type AgentStatus struct {
 	Harness    string     `json:"harness,omitempty"`
 	Agent      string     `json:"agent_id"`
 	Session    string     `json:"session,omitempty"`
 	Type       string     `json:"agent_type,omitempty"`
-	State      string     `json:"state"`
+	Status     string     `json:"status"`
 	Activity   *time.Time `json:"activity,omitempty"`
 	Transcript string     `json:"transcript,omitempty"`
 	Error      string     `json:"error,omitempty"`
@@ -273,7 +273,7 @@ func (a *App) agentReader() func(Pane) AgentStatus {
 		}
 		var st AgentStatus
 		if err != nil {
-			st = AgentStatus{Harness: p.Harness, Agent: p.AgentID, State: "unknown", Error: err.Error()}
+			st = AgentStatus{Harness: p.Harness, Agent: p.AgentID, Status: "unknown", Error: err.Error()}
 		} else {
 			st = readAgent(p, o, log.lookup(p.Harness, p.AgentID))
 			if logErr != nil && st.Error == "" {
@@ -285,7 +285,7 @@ func (a *App) agentReader() func(Pane) AgentStatus {
 	}
 }
 
-// readAgent derives one agent's state: done after a recorded stop event,
+// readAgent derives one agent's status: done after a recorded stop event,
 // missing with no transcript and no events, otherwise working or idle by the
 // age of the last transcript activity against the idle threshold.
 func readAgent(p Pane, o agentOptions, info *agentInfo) AgentStatus {
@@ -302,13 +302,13 @@ func readAgent(p Pane, o agentOptions, info *agentInfo) AgentStatus {
 		}
 	}
 	if !safeAgentID(p.AgentID) {
-		st.State, st.Error = "missing", "agent id is not a simple id"
+		st.Status, st.Error = "missing", "agent id is not a simple id"
 		return st
 	}
 	names := []string{}
 	if st.Harness != "" {
 		if _, ok := o.harnesses[st.Harness]; !ok {
-			st.State, st.Error = "missing", "no lanes.agent-harnesses row for "+st.Harness
+			st.Status, st.Error = "missing", "no lanes.agent-harnesses row for "+st.Harness
 			return st
 		}
 		names = append(names, st.Harness)
@@ -350,13 +350,13 @@ func readAgent(p Pane, o agentOptions, info *agentInfo) AgentStatus {
 	}
 	switch {
 	case info != nil && info.Last.Kind == "stop":
-		st.State = "done"
+		st.Status = "done"
 	case activity.IsZero():
-		st.State = "missing"
+		st.Status = "missing"
 	case idle <= 0 || o.now.Sub(activity) < idle:
-		st.State = "working"
+		st.Status = "working"
 	default:
-		st.State = "idle"
+		st.Status = "idle"
 	}
 	return st
 }
@@ -547,7 +547,7 @@ func readBounded(r io.Reader, limit int64, wait time.Duration) ([]byte, error) {
 	}
 }
 
-// agentRows lists every agent seen by a hook, with its derived state.
+// agentRows lists every agent seen by a hook, with its derived status.
 func (a *App) agentRows() ([]AgentStatus, error) {
 	read := a.agentReader()
 	if err := a.agentLog().refresh(); err != nil {

@@ -23,27 +23,8 @@ type call struct {
 
 func (k *call) str(key string) string { return ochazuke.StringArg(k.c.Args, key, "") }
 
-// stateChoice is the lifecycle state parameter: its choices are the
-// configured lane.states, so a picker (the Lanes page's lane.choose-state
-// alias) and completion offer them.
-func stateChoice() ochazuke.Parameter {
-	p := required("Lifecycle state")
-	p.Source = "lane.states"
-	p.Free = true // Any configured state is valid; the store names the bad ones.
-	return p
-}
-
-// fromTag is lane.state's watcher-tag parameter. It covers the required
-// state, so the args form and the lane.choose-state alias ask for a state
-// while state --from-tag needs none.
-func fromTag() ochazuke.Parameter {
-	p := param("Watcher tag; unmapped tags append notes")
-	p.Covers = true
-	return p
-}
-
 // handler wraps a spec row's run with the steps every verb shares:
-// refresh the configured states, bind the actor and read the arguments.
+// refresh the configured statuses, bind the actor and read the arguments.
 func (a *App) handler(v verbSpec) func(ochazuke.Ctx) ochazuke.Result {
 	return func(c ochazuke.Ctx) ochazuke.Result {
 		if a.changed != nil {
@@ -71,10 +52,10 @@ func (a *App) handler(v verbSpec) func(ochazuke.Ctx) ochazuke.Result {
 	}
 }
 
-// listStates reads and checks the --state filter of a listing verb.
-func (a *App) listStates(k *call) ([]string, error) {
-	states := stateList(k.c.Args["state"])
-	return states, a.store.checkStates(states)
+// listStatuses reads and checks the --status filter of a listing verb.
+func (a *App) listStatuses(k *call) ([]string, error) {
+	statuses := statusList(k.c.Args["status"])
+	return statuses, a.store.checkStatuses(statuses)
 }
 
 func (a *App) runLaneAdd(k *call) ochazuke.Result {
@@ -100,7 +81,7 @@ func (a *App) runLaneTree(k *call) ochazuke.Result { return a.listLanes(k, true)
 // flat filtered list, or the parent-first walk.
 func (a *App) listLanes(k *call, tree bool) ochazuke.Result {
 	s := a.store
-	states, e := a.listStates(k)
+	statuses, e := a.listStatuses(k)
 	if e != nil {
 		return done(nil, e)
 	}
@@ -116,8 +97,8 @@ func (a *App) listLanes(k *call, tree bool) ochazuke.Result {
 	}
 	var out []View
 	if tree {
-		out = a.treeViews(k, rows, states)
-	} else if out, e = a.flatViews(k, rows, states); e != nil {
+		out = a.treeViews(k, rows, statuses)
+	} else if out, e = a.flatViews(k, rows, statuses); e != nil {
 		return done(nil, e)
 	}
 	e = a.enrichLive(out)
@@ -128,12 +109,12 @@ func (a *App) listLanes(k *call, tree bool) ochazuke.Result {
 }
 
 // treeViews walks the lanes parent-first, keeping the subtrees the project
-// and state filters match.
-func (a *App) treeViews(k *call, rows []Lane, states []string) []View {
+// and status filters match.
+func (a *App) treeViews(k *call, rows []Lane, statuses []string) []View {
 	s := a.store
 	out := []View{}
-	kept := stateKept(rows, states)
-	hidden := s.archiveHidden(rows, states, a.r.Settings().Bool("list.hide-archived"))
+	kept := statusKept(rows, statuses)
+	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
 	inProject := func(q Lane) bool {
 		return (k.project == "" || subtreeProject(rows, q, k.project)) && (kept == nil || kept[q.ID]) && !hidden[q.ID]
 	}
@@ -144,7 +125,7 @@ func (a *App) treeViews(k *call, rows []Lane, states []string) []View {
 				continue
 			}
 			if q.Parent == "" && hide {
-				st, ok := s.states()[s.view(q, rows).RolledState]
+				st, ok := s.statuses()[s.view(q, rows).RolledStatus]
 				if ok && !st.Open {
 					continue
 				}
@@ -158,10 +139,10 @@ func (a *App) treeViews(k *call, rows []Lane, states []string) []View {
 	return out
 }
 
-// flatViews filters the lanes by parent, project and state.
-func (a *App) flatViews(k *call, rows []Lane, states []string) ([]View, error) {
+// flatViews filters the lanes by parent, project and status.
+func (a *App) flatViews(k *call, rows []Lane, statuses []string) ([]View, error) {
 	s := a.store
-	hidden := s.archiveHidden(rows, states, a.r.Settings().Bool("list.hide-archived"))
+	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
 	parent := k.str("parent")
 	if parent != "" {
 		q, e := resolve(rows, parent)
@@ -173,15 +154,15 @@ func (a *App) flatViews(k *call, rows []Lane, states []string) ([]View, error) {
 	out := []View{}
 	for _, q := range rows {
 		v := s.view(q, rows)
-		if (parent == "" || q.Parent == parent) && (k.project == "" || projectMatches(v.EffectiveProject, k.project)) && inStates(states, q) && !hidden[q.ID] {
+		if (parent == "" || q.Parent == parent) && (k.project == "" || projectMatches(v.EffectiveProject, k.project)) && inStatuses(statuses, q) && !hidden[q.ID] {
 			out = append(out, v)
 		}
 	}
 	return out, nil
 }
 
-func inStates(states []string, q Lane) bool {
-	return len(states) == 0 || slices.Contains(states, q.State)
+func inStatuses(statuses []string, q Lane) bool {
+	return len(statuses) == 0 || slices.Contains(statuses, q.Status)
 }
 
 func (a *App) runLaneShow(k *call) ochazuke.Result {
@@ -265,33 +246,48 @@ func (a *App) runLaneMove(k *call) ochazuke.Result {
 	return done(q, e)
 }
 
-func (a *App) runLaneCopy(k *call) ochazuke.Result {
-	q, e := a.store.Copy(k.target, k.str("name"))
+func (a *App) runLaneDuplicate(k *call) ochazuke.Result {
+	q, e := a.store.Duplicate(k.target, k.str("name"))
 	return done(q, e)
 }
 
-func (a *App) runLaneNote(k *call) ochazuke.Result {
-	q, e := a.store.Note(k.target, k.str("text"))
+func (a *App) runLaneAnnotate(k *call) ochazuke.Result {
+	q, e := a.store.Annotate(k.target, k.str("text"))
 	return done(q, e)
 }
 
-func (a *App) runLaneState(k *call) ochazuke.Result {
+// statusChoice is the lifecycle status parameter of choose-status: its
+// choices are the configured lanes.statuses (refreshStatusEnum), so the
+// args form offers them.
+func statusChoice() ochazuke.Parameter {
+	p := required("Lifecycle status")
+	p.Free = true // Any configured status is valid; the store names the bad ones.
+	return p
+}
+
+// runLaneChooseStatus is the Lanes page's s row: the status prop's write
+// (lane set ID status X) with the status asked for as a required argument.
+func (a *App) runLaneChooseStatus(k *call) ochazuke.Result {
+	q, e := a.store.StatusAs(k.verb, k.target, k.str("status"), "")
+	return done(q, e)
+}
+
+// runLaneTag maps a watcher tag through lanes.tag-statuses to a status; a
+// tag the table does not map is appended as a note.
+func (a *App) runLaneTag(k *call) ochazuke.Result {
 	s := a.store
-	state := k.str("state")
-	note := k.str("note")
-	if tag := k.str("from-tag"); tag != "" {
-		table := map[string]string{}
-		if e := json.Unmarshal([]byte(a.r.Settings().String("lanes.tag-states")), &table); e != nil {
-			return done(nil, e)
-		}
-		state = table[tag]
-		note = strings.TrimSpace(tag + " " + note)
-		if state == "" {
-			q, e := s.Note(k.target, note)
-			return done(q, e)
-		}
+	tag := k.str("tag")
+	note := strings.TrimSpace(tag + " " + k.str("note"))
+	table := map[string]string{}
+	if e := json.Unmarshal([]byte(a.r.Settings().String("lanes.tag-statuses")), &table); e != nil {
+		return done(nil, e)
 	}
-	q, e := s.State(k.target, state, note)
+	status := table[tag]
+	if status == "" {
+		q, e := s.Annotate(k.target, note)
+		return done(q, e)
+	}
+	q, e := s.StatusAs(k.verb, k.target, status, note)
 	return done(q, e)
 }
 
@@ -305,7 +301,7 @@ func (a *App) runLaneStart(k *call) ochazuke.Result {
 	return done(q, e)
 }
 
-// runLanePreset runs a state preset verb (park, review, finish, cancel,
+// runLanePreset runs a status preset verb (park, review, finish, cancel,
 // reopen, archive); the row's name is the preset.
 func (a *App) runLanePreset(k *call) ochazuke.Result {
 	q, e := a.store.Preset(k.target, k.verb, k.str("note"))
@@ -419,7 +415,7 @@ func (a *App) runProjectAssociate(k *call) ochazuke.Result {
 
 func (a *App) runProjectLanes(k *call) ochazuke.Result {
 	s := a.store
-	states, e := a.listStates(k)
+	statuses, e := a.listStatuses(k)
 	if e != nil {
 		return done(nil, e)
 	}
@@ -428,9 +424,9 @@ func (a *App) runProjectLanes(k *call) ochazuke.Result {
 		return done(nil, e)
 	}
 	out := []View{}
-	hidden := s.archiveHidden(rows, states, a.r.Settings().Bool("list.hide-archived"))
+	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
 	for _, q := range rows {
-		if v := s.view(q, rows); projectMatches(v.EffectiveProject, k.project) && inStates(states, q) && !hidden[q.ID] {
+		if v := s.view(q, rows); projectMatches(v.EffectiveProject, k.project) && inStatuses(statuses, q) && !hidden[q.ID] {
 			out = append(out, v)
 		}
 	}

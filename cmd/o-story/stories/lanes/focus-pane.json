@@ -8,14 +8,14 @@
   "script": [
     "a",
     "ctrl+space",
-    {"job": "pane.choices", "state": "done"},
+    {"job": "pane.choices", "status": "done"},
     {"type": "Worker"},
     "enter",
     "enter",
-    {"job": "lane.page-rows", "state": "done"},
+    {"job": "lane.page-rows", "status": "done"},
     "g",
     "p",
-    {"job": "lane.focus-pane", "state": "done"}
+    {"job": "lane.focus-pane", "status": "done"}
   ],
   "expect": [
     {"after": 3, "contains": ["Worker", "fixture-session"]},

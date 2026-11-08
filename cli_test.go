@@ -103,13 +103,13 @@ func TestCLIVerbs(t *testing.T) {
 	f.lane("move", "child", "")
 	f.lane("move", "child", "root")
 	f.fail("cycle", "lane", "move", "root", "child")
-	copied := f.lane("copy", "child", "retry")
-	if copied["state"] != "planned" {
+	copied := f.lane("duplicate", "child", "retry")
+	if copied["status"] != "planned" {
 		t.Fatal(copied)
 	}
 	f.lane("start", "child", "--pane", "w1", "--session", "s", "--branch", "branch", "--worktree", filepath.Join(f.dir, "wt"), "--harness", "test")
 	f.lane("associate", "child", "w2", "--session", "s", "--role", "reviewer")
-	if got := f.lane("live", "root")["state"]; got != "needs input" {
+	if got := f.lane("live", "root")["status"]; got != "needs input" {
 		t.Fatal(got)
 	}
 	f.lane("focus-pane", "child")
@@ -132,24 +132,24 @@ func TestCLIVerbs(t *testing.T) {
 	}
 	f.call("pane", "unassociate", "w2", "child", "--session", "s")
 	f.lane("associate", "child") // no pane is recordable and unassociated
-	f.lane("note", "child", "a note")
+	f.lane("annotate", "child", "a note")
 	f.lane("link", "child", "report", filepath.Join(f.dir, "report.md"))
 	f.lane("unlink", "child", "report", filepath.Join(f.dir, "report.md"))
-	for _, verb := range []string{"park", "review", "merge", "finish", "cancel", "reopen"} {
+	for _, verb := range []string{"park", "merge", "finish", "cancel", "reopen"} {
 		args := []string{verb, "child"}
 		if verb == "merge" {
 			args = append(args, "--commit", "abc123")
 		}
 		f.lane(args...)
 	}
-	f.lane("state", "child", "done")
-	f.lane("state", "child", "--from-tag", "LANE-DONE")
-	f.lane("state", "child", "--from-tag", "APPROVAL")
+	f.lane("set", "child", "status", "done")
+	f.lane("tag", "child", "LANE-DONE")
+	f.lane("tag", "child", "APPROVAL")
 	f.call("lane", "history", "child")
 	f.call("lane", "list")
 	f.call("lane", "tree", "--open")
 	shown := f.lane("show", "child")
-	if shown["state"] != "review" || shown["started"] == nil || shown["finished"] != nil {
+	if shown["status"] != "review" || shown["started"] == nil || shown["finished"] != nil {
 		t.Fatal(shown)
 	}
 	if got := f.call("lane", "yank-id", "child"); got != "child" {
@@ -163,30 +163,30 @@ func TestCLIVerbs(t *testing.T) {
 	f.lane("show", "retry")
 	f.call("lane", "define", "--json", `{"lanes":[{"name":"defined"},{"name":"nested","parent":"defined"}]}`)
 }
-func TestCLIStateAsData(t *testing.T) {
+func TestCLIStatusAsData(t *testing.T) {
 	f := newCLI(t)
 	raw := `[{"name":"queued","open":true},{"name":"testing","starts":true,"open":true},{"name":"released","ends":true}]`
-	if _, e := f.a.r.Settings().SetSession("lanes.states", raw); e != nil {
+	if _, e := f.a.r.Settings().SetSession("lanes.statuses", raw); e != nil {
 		t.Fatal(e)
 	}
 	q := f.lane("add", "custom")
-	if q["state"] != "queued" {
+	if q["status"] != "queued" {
 		t.Fatal(q)
 	}
-	f.lane("state", "custom", "testing")
-	f.lane("state", "custom", "released")
+	f.lane("set", "custom", "status", "testing")
+	f.lane("set", "custom", "status", "released")
 	v := f.lane("show", "custom")
 	if v["started"] == nil || v["finished"] == nil {
 		t.Fatal(v)
 	}
-	f.fail("unknown state", "lane", "state", "custom", "bogus")
+	f.fail("must be one of", "lane", "set", "custom", "status", "bogus")
 }
 func TestCLIRightsAndActors(t *testing.T) {
 	f := newCLI(t)
 	f.lane("add", "owner")
 	actor := Actor{Kind: "agent", Name: "implementer", Harness: "test", Pane: "w", Session: "s", Model: "test-model"}
 	f.a.actor = actor
-	f.lane("note", "owner", "agent note")
+	f.lane("annotate", "owner", "agent note")
 	f.lane("reword", "owner", "agent-amended wording")
 	q := mustResolve(t, f.a.store, "owner")
 	if q.History[len(q.History)-1].By != actor {
@@ -196,10 +196,10 @@ func TestCLIRightsAndActors(t *testing.T) {
 		t.Fatal(q)
 	}
 	f.fail("verb declaration", "lane", "delete", "owner")
-	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.note","right":"never"}]`); e != nil {
+	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.annotate","right":"never"}]`); e != nil {
 		t.Fatal(e)
 	}
-	f.fail("agents.rights[0]", "lane", "note", "owner", "blocked")
+	f.fail("agents.rights[0]", "lane", "annotate", "owner", "blocked")
 	if _, e := f.a.r.Settings().SetSession("agents.rights", `[{"match":"lane.delete","right":"allow"}]`); e != nil {
 		t.Fatal(e)
 	}
@@ -225,14 +225,14 @@ func TestCLILiveOffUnknown(t *testing.T) {
 	f.lane("add", "live")
 	f.lane("associate", "live", "w1", "--session", "s")
 	f.a.run = func(context.Context, []string) ([]byte, error) { return nil, errors.New("offline") }
-	if got := f.lane("live", "live")["state"]; got != "unknown" {
+	if got := f.lane("live", "live")["status"]; got != "unknown" {
 		t.Fatal(got)
 	}
 	if _, e := f.a.r.Settings().SetSession("lanes.live", false); e != nil {
 		t.Fatal(e)
 	}
 	f.a.run = func(context.Context, []string) ([]byte, error) { t.Fatal("live-off invoked command"); return nil, nil }
-	if got := f.lane("live", "live")["state"]; got != "off" {
+	if got := f.lane("live", "live")["status"]; got != "off" {
 		t.Fatal(got)
 	}
 }

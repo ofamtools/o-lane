@@ -256,6 +256,7 @@ error	prop	seed
 errored	filter	seed	
 estimate	prop	seed	
 eta	prop	seed	
+event	noun	lx4	
 events	noun	seed	plural
 examples	prop+relation	seed	
 exists	prop	seed	
@@ -292,10 +293,12 @@ filter-prop	action	seed
 filter-prop-clear	action	seed	
 filter-props-clear	action	seed	
 filter-save	action+noun	seed	
+filter-save-form	noun	lx4	
 filter-saved	action	seed	
 filter-saved-delete	action	seed	
 filter-saved-pick	action	seed	
 filter-type	action	seed	
+filter-value	noun	lx4	
 filter-values	noun	seed	
 filters	action	seed	
 find	action	seed	
@@ -317,6 +320,7 @@ follow-up	action	seed
 foreground	prop	seed	
 forget	action	seed	
 form	noun	seed	
+form-chip	noun	lx4	
 form-chips	noun	seed	
 form-choice	noun	seed	
 form-field	noun	seed	
@@ -350,7 +354,9 @@ hints-cancel	action	seed
 hints-erase	action	seed	
 hints-ignore	action	seed	
 history	action+noun+prop	seed	
+history-entry	noun	lx4	
 historyKind	prop	seed	
+hook	noun	lx4	
 hooks	noun	seed	plural
 host	noun+prop	seed	
 hosts	relation	seed	
@@ -408,6 +414,7 @@ limit	action	seed
 link	action	seed	
 link-copy	action	seed	
 link-open	action	seed	
+link-yank	action	lx4	
 list	action+noun	seed	
 lists	prop	seed	
 live	action	seed	
@@ -501,6 +508,7 @@ open-transcript	action	seed
 open_notes	prop	seed	
 open_tasks	prop	seed	
 opensPage	prop	seed	
+operation	noun	lx4	
 operations	noun	seed	plural
 operator	action	seed	
 order	prop	seed	
@@ -754,6 +762,7 @@ signal	noun+prop	seed
 size	prop	seed	
 skill	noun	seed	
 slot	prop	seed	
+snapshot	noun	lx4	
 snooze	action	seed	
 snoozed-until	prop	seed	
 sort	action	seed	
@@ -862,11 +871,13 @@ upspeed	prop	seed
 upstream	prop	seed	
 url	prop	seed	
 url_hint	prop	seed	
+user-operation	noun	lx4	
 value	prop	seed	
 verb	noun+prop	seed	
 verbs	prop	seed	
 via	prop	seed	
 view	action+noun	seed	
+viewport	noun	lx4	
 vim	noun	seed	
 visual	action	seed	
 vocabulary	prop	seed	
@@ -895,3 +906,4 @@ zoom	action	seed
 zoom-in	action	seed	
 zoom-out	action	seed	
 zoom-reset	action	seed	
+lane-detail	noun	yes	o-lane page detail pane noun

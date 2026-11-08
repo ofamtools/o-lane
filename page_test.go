@@ -62,8 +62,8 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 			Lane string
 			Pane Pane
 		}
-		States      []struct{ Lane, State, Note string }
-		LiveWindows []windowState `json:"live_windows"`
+		Statuses    []struct{ Lane, Status, Note string }
+		LiveWindows []windowStatus `json:"live_windows"`
 	}
 	if e := json.Unmarshal(raw, &seed); e != nil {
 		t.Fatal(e)
@@ -85,8 +85,8 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 			t.Fatal(e)
 		}
 	}
-	for _, st := range seed.States {
-		if _, e := a.store.State(st.Lane, st.State, st.Note); e != nil {
+	for _, st := range seed.Statuses {
+		if _, e := a.store.Status(st.Lane, st.Status, st.Note); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -157,9 +157,9 @@ func TestLaneStories(t *testing.T) {
 					t.Fatalf("live off ran tuios: %s", data)
 				}
 			}
-			if strings.HasSuffix(story.Name, "state-change") {
+			if strings.HasSuffix(story.Name, "status-change") {
 				q, e := a.store.Resolve("Implementation")
-				if e != nil || q.State != "running" {
+				if e != nil || q.Status != "running" {
 					t.Fatal(q, e)
 				}
 			}
@@ -198,7 +198,7 @@ func TestPageProjection(t *testing.T) {
 	if rows[2].Tones[0].Tone != ochazuke.ToneWorking {
 		t.Fatal(rows[2].Tones)
 	}
-	if _, e = a.store.State(q.ID, "done", ""); e != nil {
+	if _, e = a.store.Status(q.ID, "done", ""); e != nil {
 		t.Fatal(e)
 	}
 	a.store.Now = func() time.Time { return time.Date(2026, 1, 1, 17, 0, 0, 0, time.UTC) }
@@ -206,7 +206,7 @@ func TestPageProjection(t *testing.T) {
 	if e != nil || rows[2].Cells[5] != "1h 30m" {
 		t.Fatal(rows, e)
 	}
-	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.state-tones", "lanes.history-in-detail", "lanes.tree", "lanes.project-column"} {
+	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.status-tones", "lanes.history-in-detail", "lanes.tree", "lanes.project-column"} {
 		if e = a.r.Settings().Set(name, false); e != nil {
 			t.Fatal(e)
 		}
@@ -240,7 +240,7 @@ func TestPageProjection(t *testing.T) {
 	}
 	// Closed-root filtering drops the entire tree, never orphaning children.
 	for _, name := range []string{"Root", "Child"} {
-		if _, e = a.store.State(name, "done", ""); e != nil {
+		if _, e = a.store.Status(name, "done", ""); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -296,7 +296,7 @@ func TestPageCatalogMount(t *testing.T) {
 		t.Fatal(nodes)
 	}
 	// The six domain key rows travel in the catalog; no application key switch.
-	want := map[string]string{"enter": "show", "s": "state", "g p": "focus-pane", "a": "choose-pane", "n": "note", "y": "yank-id"}
+	want := map[string]string{"enter": "show", "s": "choose-status", "g p": "focus-pane", "a": "choose-pane", "n": "annotate", "y": "yank-id"}
 	for _, row := range doc.Bindings {
 		if row.Noun == "lane" {
 			if verb, ok := want[row.Keys]; ok && verb == row.Request.Verb {
@@ -389,7 +389,7 @@ func TestPageTargetComesFromTheRow(t *testing.T) {
 	}
 	p.m.Width, p.m.Height = 140, 38
 	p.m.View()
-	for _, key := range []string{"lane.show", "lane.note", "lane.yank-id", "lane.state", "lane.choose-pane", "lane.focus-pane"} {
+	for _, key := range []string{"lane.show", "lane.annotate", "lane.yank-id", "lane.choose-status", "lane.choose-pane", "lane.focus-pane"} {
 		if got := a.r.Operations.At(ochazuke.Key(key)).Parameters["target"].From; got != "row:id" {
 			t.Errorf("%s target From %q", key, got)
 		}
@@ -481,7 +481,7 @@ func TestPageNewestRoots(t *testing.T) {
 }
 
 func TestPageOptOutMounts(t *testing.T) {
-	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.history-in-detail", "lanes.state-tones", "lanes.tree", "lanes.detail"} {
+	for _, name := range []string{"lanes.durations", "lanes.pane-column", "lanes.history-in-detail", "lanes.status-tones", "lanes.tree", "lanes.detail"} {
 		t.Run(name, func(t *testing.T) {
 			a := pageFixture(t)
 			seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Root"},{"name":"Child","parent":"Root"}],"start":"Child"}`))
@@ -524,7 +524,7 @@ func TestPageOptOutMounts(t *testing.T) {
 						t.Fatal("retained history")
 					}
 				}
-			case "lanes.state-tones":
+			case "lanes.status-tones":
 				for _, row := range p.v.List(listID).Items() {
 					for _, tone := range row.Tones {
 						if tone.Cell == 1 {
@@ -584,7 +584,7 @@ func TestPageStalePaneChoice(t *testing.T) {
 	}
 }
 
-func TestStateReason(t *testing.T) {
+func TestStatusReason(t *testing.T) {
 	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	e := func(id, kind, to, text string) Entry { return Entry{ID: id, At: at, Kind: kind, To: to, Text: text} }
 	for _, c := range []struct {
@@ -593,29 +593,29 @@ func TestStateReason(t *testing.T) {
 		want    string
 	}{
 		{"none", nil, ""},
-		{"own text", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "older"), e("3", "state", "parked", "waiting on owner")}, "waiting on owner"},
-		{"note before change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "first"), e("3", "note", "", "needs review"), e("4", "state", "review", "")}, "needs review"},
-		{"note before previous change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "old"), e("3", "state", "running", ""), e("4", "state", "review", "")}, ""},
-		{"note after change", []Entry{e("1", "create", "planned", ""), e("2", "state", "parked", ""), e("3", "note", "", "later")}, ""},
-		{"undone note", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "undone"), e("3", "state", "parked", ""), {ID: "4", Kind: "undo", Undo: &UndoRecord{Entries: []string{"2"}}}}, ""},
+		{"own text", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "older"), e("3", "status", "parked", "waiting on owner")}, "waiting on owner"},
+		{"note before change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "first"), e("3", "note", "", "needs review"), e("4", "status", "review", "")}, "needs review"},
+		{"note before previous change", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "old"), e("3", "status", "running", ""), e("4", "status", "review", "")}, ""},
+		{"note after change", []Entry{e("1", "create", "planned", ""), e("2", "status", "parked", ""), e("3", "note", "", "later")}, ""},
+		{"undone note", []Entry{e("1", "create", "planned", ""), e("2", "note", "", "undone"), e("3", "status", "parked", ""), {ID: "4", Kind: "undo", Undo: &UndoRecord{Entries: []string{"2"}}}}, ""},
 	} {
-		if got := stateReason(c.history); got != c.want {
+		if got := statusReason(c.history); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
-	if got := stateAbout("planned", "", "why"); got != "" {
+	if got := statusAbout("planned", "", "why"); got != "" {
 		t.Fatalf("no description shows %q", got)
 	}
-	if got := stateAbout("parked", "Paused.", "waiting"); got != "**parked** — Paused.\n\nNote: waiting" {
+	if got := statusAbout("parked", "Paused.", "waiting"); got != "**parked** — Paused.\n\nNote: waiting" {
 		t.Fatal(got)
 	}
-	if got := stateAbout("parked", "Paused.", ""); got != "**parked** — Paused." {
+	if got := statusAbout("parked", "Paused.", ""); got != "**parked** — Paused." {
 		t.Fatal(got)
 	}
 }
-func TestPageStateDescriptions(t *testing.T) {
+func TestPageStatusDescriptions(t *testing.T) {
 	a := pageFixture(t)
-	seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Fresh"},{"name":"Paused"}],"states":[{"lane":"Paused","state":"parked","note":"waiting on owner"}]}`))
+	seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Fresh"},{"name":"Paused"}],"statuses":[{"lane":"Paused","status":"parked","note":"waiting on owner"}]}`))
 	about := func() map[string]string {
 		rows, e := laneRows(a.store, a.pageOptions())
 		if e != nil {
@@ -623,7 +623,7 @@ func TestPageStateDescriptions(t *testing.T) {
 		}
 		out := map[string]string{}
 		for _, row := range rows {
-			text, _ := row.Data.(map[string]any)["state_about"].(string)
+			text, _ := row.Data.(map[string]any)["status_about"].(string)
 			out[row.Label] = text
 		}
 		return out
@@ -632,23 +632,23 @@ func TestPageStateDescriptions(t *testing.T) {
 	if got["Fresh"] != "" || !strings.Contains(got["Paused"], "**parked** — Paused on purpose") || !strings.HasSuffix(got["Paused"], "Note: waiting on owner") {
 		t.Fatal(got)
 	}
-	if lanePage(a.pageOptions()).Detail.Sections[0].Field != "state_about" {
-		t.Fatal("state description section is not first")
+	if lanePage(a.pageOptions()).Detail.Sections[0].Field != "status_about" {
+		t.Fatal("status description section is not first")
 	}
-	// A custom state table supplies its own descriptions; rows without one
+	// A custom status table supplies its own descriptions; rows without one
 	// stay quiet, purely from data.
-	a.store.States = []State{{Name: "planned", Open: true, Description: "Not started."}, {Name: "parked", Open: true}}
+	a.store.Statuses = []Status{{Name: "planned", Open: true, Description: "Not started."}, {Name: "parked", Open: true}}
 	if got = about(); got["Fresh"] != "**planned** — Not started." || got["Paused"] != "" {
 		t.Fatal(got)
 	}
-	if e := a.r.Settings().Set("lanes.state-descriptions", false); e != nil {
+	if e := a.r.Settings().Set("lanes.status-descriptions", false); e != nil {
 		t.Fatal(e)
 	}
 	if got = about(); got["Fresh"] != "" {
 		t.Fatal("opt-out ignored", got)
 	}
 	for _, section := range lanePage(a.pageOptions()).Detail.Sections {
-		if section.Field == "state_about" {
+		if section.Field == "status_about" {
 			t.Fatal("section opt-out ignored")
 		}
 	}
@@ -733,7 +733,7 @@ func TestCatalogDeclaresSingularNamespace(t *testing.T) {
 	if got, e := ocli.CatalogNamespace(doc, "o-lane"); e != nil || got != "lane" {
 		t.Fatal(got, e)
 	}
-	if op, ok := a.r.Operations.Find("lane.state"); !ok || op.Key.Full() != "lane.lane.state" {
+	if op, ok := a.r.Operations.Find("lane.tag"); !ok || op.Key.Full() != "lane.lane.tag" {
 		t.Fatal(op.Key, ok)
 	}
 }

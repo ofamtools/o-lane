@@ -11,7 +11,7 @@ import (
 // The project and agent nouns are thing nouns (DESIGN-001) with read-only
 // (facts) stores: a project is a reference recorded on lanes (or listed by
 // lanes.project-source), an agent is a participant the agent hook
-// recorded, with its derived live state. Nothing here is stored by o-lane
+// recorded, with its derived live status. Nothing here is stored by o-lane
 // as a record of its own; project.associate and agent.associate relate
 // them to lanes, and list and get are the standard verbs, over the same
 // rows project list and agent list answer.
@@ -35,10 +35,10 @@ func agentProps() []ochazuke.PropSpec {
 		factProp("harness", "string", "The harness"),
 		factProp("session", "string", "The harness session the agent runs in"),
 		factProp("agent_type", "string", "The agent kind"),
-		factProp("state", "string", "working, idle, done or missing, from lanes.agent-harnesses data"),
+		factProp("status", "string", "working, idle, done or missing, from lanes.agent-harnesses data"),
 		factProp("activity", "string", "When the agent last did anything"),
 		factProp("transcript", "string", "The agent's transcript file"),
-		factProp("error", "string", "Why the state could not be read"),
+		factProp("error", "string", "Why the status could not be read"),
 	}
 }
 
@@ -57,7 +57,7 @@ func (a *App) projectStore() ochazuke.Store {
 		}
 		return out, nil
 	}
-	return ochazuke.Store{Kind: ochazuke.Collection, Facts: true,
+	return ochazuke.Store{Kind: ochazuke.KindCollection, Facts: true,
 		List: func(ochazuke.Ctx, ochazuke.ListQuery) ([]ochazuke.Thing, error) { return things() },
 		Get: func(_ ochazuke.Ctx, ref string) (ochazuke.Thing, error) {
 			all, e := things()
@@ -96,7 +96,7 @@ func (a *App) agentStore() ochazuke.Store {
 		}
 		return out, nil
 	}
-	return ochazuke.Store{Kind: ochazuke.Collection, Facts: true,
+	return ochazuke.Store{Kind: ochazuke.KindCollection, Facts: true,
 		List: func(ochazuke.Ctx, ochazuke.ListQuery) ([]ochazuke.Thing, error) { return things() },
 		Get: func(_ ochazuke.Ctx, id string) (ochazuke.Thing, error) {
 			all, e := things()

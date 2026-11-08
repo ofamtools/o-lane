@@ -78,9 +78,9 @@ func (s *Store) add(rows *[]Lane, spec Spec) (Lane, error) {
 		}
 		id = base + "-" + strconv.Itoa(n)
 	}
-	state := s.stateRows()[0].Name
-	q := Lane{Spec: spec, ID: id, State: state, Created: s.now(), Updated: s.now(), Panes: []Pane{}, Links: []Link{}, History: []Entry{}}
-	s.entry(&q, "create", "", state, "", nil, nil)
+	status := s.statusRows()[0].Name
+	q := Lane{Spec: spec, ID: id, Status: status, Created: s.now(), Updated: s.now(), Panes: []Pane{}, Links: []Link{}, History: []Entry{}}
+	s.entry(&q, "create", "", status, "", nil, nil)
 	*rows = append(*rows, q)
 	return q, nil
 }
@@ -258,8 +258,8 @@ func (s *Store) Move(target, parent string) (Lane, error) {
 		return nil
 	})
 }
-func (s *Store) Copy(target, name string) (out Lane, err error) {
-	err = s.change("copy", func(rows *[]Lane) error {
+func (s *Store) Duplicate(target, name string) (out Lane, err error) {
+	err = s.change("duplicate", func(rows *[]Lane) error {
 		q, e := resolve(visible(*rows), target)
 		if e != nil {
 			return e
@@ -281,89 +281,89 @@ func (s *Store) Copy(target, name string) (out Lane, err error) {
 	})
 	return
 }
-func (s *Store) state(q *Lane, state, note string) error {
-	if _, ok := s.states()[state]; !ok {
-		return fmt.Errorf("unknown state %q; configure lanes.states to add it", state)
+func (s *Store) status(q *Lane, status, note string) error {
+	if _, ok := s.statuses()[status]; !ok {
+		return fmt.Errorf("unknown status %q; configure lanes.statuses to add it", status)
 	}
-	old := q.State
-	q.State = state
-	s.entry(q, "state", old, state, note, nil, nil)
+	old := q.Status
+	q.Status = status
+	s.entry(q, "status", old, status, note, nil, nil)
 	return nil
 }
 
-// archiveState is the first lanes.states row with the archive role.
-func (s *Store) archiveState() (State, bool) {
-	for _, st := range s.stateRows() {
+// archiveStatus is the first lanes.statuses row with the archive role.
+func (s *Store) archiveStatus() (Status, bool) {
+	for _, st := range s.statusRows() {
 		if st.Archive {
 			return st, true
 		}
 	}
-	return State{}, false
+	return Status{}, false
 }
 
-// restoreState is where a restored lane returns: the state it had before the
-// latest effective move into its current archive state, else the first
-// configured state that is neither closed nor archived, else the first row.
-func (s *Store) restoreState(q *Lane) string {
-	states := s.states()
+// restoreStatus is where a restored lane returns: the status it had before the
+// latest effective move into its current archive status, else the first
+// configured status that is neither closed nor archived, else the first row.
+func (s *Store) restoreStatus(q *Lane) string {
+	statuses := s.statuses()
 	history := activeHistory(q.History)
 	for i := len(history) - 1; i >= 0; i-- {
 		e := history[i]
-		if e.Kind != "state" || e.To != q.State {
+		if e.Kind != "status" || e.To != q.Status {
 			continue
 		}
-		if from, ok := states[e.From]; ok && !from.Archive {
+		if from, ok := statuses[e.From]; ok && !from.Archive {
 			return e.From
 		}
 	}
-	for _, st := range s.stateRows() {
+	for _, st := range s.statusRows() {
 		if st.Open && !st.Archive {
 			return st.Name
 		}
 	}
-	return s.stateRows()[0].Name
+	return s.statusRows()[0].Name
 }
 
 // setArchived writes the archive role: on moves the lane to the archive
-// state, off returns it to the state it had. Either is a no-op when the lane
+// status, off returns it to the status it had. Either is a no-op when the lane
 // is already there.
 func (s *Store) setArchived(q *Lane, on bool, note string) error {
-	if s.states()[q.State].Archive == on {
+	if s.statuses()[q.Status].Archive == on {
 		return nil
 	}
-	archive, ok := s.archiveState()
+	archive, ok := s.archiveStatus()
 	if !ok {
-		return errors.New("no lanes.states row has archive:true; add one (for example name archived) to archive lanes")
+		return errors.New("no lanes.statuses row has archive:true; add one (for example name archived) to archive lanes")
 	}
 	if on {
-		return s.state(q, archive.Name, note)
+		return s.status(q, archive.Name, note)
 	}
-	return s.state(q, s.restoreState(q), note)
+	return s.status(q, s.restoreStatus(q), note)
 }
 
 // archiveHidden is the lanes the default views leave out: lanes in an archive
-// state and everything below them. nil when hiding is off or the caller named
-// an archive state, which asks for archived lanes.
+// status and everything below them. nil when hiding is off or the caller named
+// an archive status, which asks for archived lanes.
 func (s *Store) archiveHidden(rows []Lane, named []string, enabled bool) map[string]bool {
 	if !enabled {
 		return nil
 	}
-	states := s.states()
+	statuses := s.statuses()
 	for _, name := range named {
-		if states[name].Archive {
+		if statuses[name].Archive {
 			return nil
 		}
 	}
-	parent, state := map[string]string{}, map[string]string{}
+	parent, status := map[string]string{}, map[string]string{}
 	for _, q := range rows {
-		parent[q.ID], state[q.ID] = q.Parent, q.State
+		parent[q.ID], status[q.ID] = q.Parent, q.Status
 	}
 	hidden := map[string]bool{}
 	for _, q := range rows {
 		seen := map[string]bool{}
 		for id := q.ID; id != "" && !seen[id]; id = parent[id] {
 			seen[id] = true
-			if states[state[id]].Archive {
+			if statuses[status[id]].Archive {
 				hidden[q.ID] = true
 				break
 			}
@@ -371,11 +371,19 @@ func (s *Store) archiveHidden(rows []Lane, named []string, enabled bool) map[str
 	}
 	return hidden
 }
-func (s *Store) State(target, state, note string) (Lane, error) {
-	return s.mutate("state", target, func(q *Lane, _ *[]Lane) error { return s.state(q, state, note) })
+
+// Status records a status change, as writing the status prop does.
+func (s *Store) Status(target, status, note string) (Lane, error) {
+	return s.StatusAs("set", target, status, note)
 }
-func (s *Store) Note(target, text string) (Lane, error) {
-	return s.mutate("note", target, func(q *Lane, _ *[]Lane) error {
+
+// StatusAs records a status change under the action that asked for it (set,
+// tag), which is the verb an agent's right is checked on.
+func (s *Store) StatusAs(action, target, status, note string) (Lane, error) {
+	return s.mutate(action, target, func(q *Lane, _ *[]Lane) error { return s.status(q, status, note) })
+}
+func (s *Store) Annotate(target, text string) (Lane, error) {
+	return s.mutate("annotate", target, func(q *Lane, _ *[]Lane) error {
 		if strings.TrimSpace(text) == "" {
 			return errors.New("note must not be empty")
 		}
@@ -527,21 +535,21 @@ func (s *Store) AssociateMoving(target string, p Pane, remove bool) (Associated,
 	return Associated{Lane: q, MovedFrom: moved}, e
 }
 func (s *Store) preset(q *Lane, verb, note string) error {
-	table := s.StatePresets
+	table := s.StatusPresets
 	if table == nil {
-		_ = json.Unmarshal([]byte(defaultStatePresets), &table)
+		_ = json.Unmarshal([]byte(defaultStatusPresets), &table)
 	}
-	state, ok := table[verb]
-	if !ok || state == "" {
-		return fmt.Errorf("lanes.state-presets: preset %q is not configured", verb)
+	status, ok := table[verb]
+	if !ok || status == "" {
+		return fmt.Errorf("lanes.status-presets: preset %q is not configured", verb)
 	}
-	if _, ok := s.states()[state]; !ok {
-		return fmt.Errorf("lanes.state-presets: preset %q names %q, which is absent from lanes.states", verb, state)
+	if _, ok := s.statuses()[status]; !ok {
+		return fmt.Errorf("lanes.status-presets: preset %q names %q, which is absent from lanes.statuses", verb, status)
 	}
-	return s.state(q, state, note)
+	return s.status(q, status, note)
 }
 func (s *Store) Preset(target, verb, note string) (Lane, error) {
-	return s.mutate("state", target, func(q *Lane, _ *[]Lane) error { return s.preset(q, verb, note) })
+	return s.mutate(verb, target, func(q *Lane, _ *[]Lane) error { return s.preset(q, verb, note) })
 }
 func (s *Store) Start(target string, p Pane, branch, worktree string) (Lane, error) {
 	return s.mutate("start", target, func(q *Lane, rows *[]Lane) error {

@@ -57,7 +57,7 @@ func TestPanePrefixAssociation(t *testing.T) {
 func TestPanePrefixLive(t *testing.T) {
 	const full = "8a3bcdef-1234-5678-90ab-123456789abc"
 	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	mapping, e := parseLiveStates(defaultLiveStates)
+	mapping, e := parseLiveStatuses(defaultLiveStatuses)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -74,24 +74,24 @@ func TestPanePrefixLive(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := Pane{Window: tc.ref, Session: "s"}
-			snapshots := liveSnapshots{{Session: "s"}: {windows: tc.windows, stateTimes: map[string]time.Time{full: at}}}
+			snapshots := liveSnapshots{{Session: "s"}: {windows: tc.windows, statusTimes: map[string]time.Time{full: at}}}
 			r := newLiveReader(nil, []Pane{p}, snapshots)
 			o := liveOptions{on: true, mapping: mapping}
 			got := aggregateLive([]Pane{p}, o, r.current([]Pane{p}))
-			if got.State != tc.want {
-				t.Fatalf("got %s want %s", got.State, tc.want)
+			if got.Status != tc.want {
+				t.Fatalf("got %s want %s", got.Status, tc.want)
 			}
 			if tc.name == "unique" || tc.name == "waiting" {
-				if got.Panes[0].StateSince == nil || !got.Panes[0].StateSince.Equal(at) {
+				if got.Panes[0].StatusSince == nil || !got.Panes[0].StatusSince.Equal(at) {
 					t.Fatal("resolved timestamp", got.Panes)
 				}
-				r.apply(liveEvent{Type: "agent-state", Session: "s", Window: full, State: "needs_input"})
+				r.apply(liveEvent{Type: "agent-state", Session: "s", Window: full, Status: "needs_input"})
 				select {
 				case <-r.changed:
 				default:
 					t.Fatal("prefix update did not notify the page")
 				}
-				if live := aggregateLive([]Pane{p}, o, r.current([]Pane{p})); live.State != "needs input" {
+				if live := aggregateLive([]Pane{p}, o, r.current([]Pane{p})); live.Status != "needs input" {
 					t.Fatal("prefix stream update", live)
 				}
 				r.apply(liveEvent{Type: "window-closed", Session: "s", Window: full})
@@ -100,7 +100,7 @@ func TestPanePrefixLive(t *testing.T) {
 				default:
 					t.Fatal("prefix close did not notify the page")
 				}
-				if live := aggregateLive([]Pane{p}, o, r.current([]Pane{p})); live.State != "closed" {
+				if live := aggregateLive([]Pane{p}, o, r.current([]Pane{p})); live.Status != "closed" {
 					t.Fatal("prefix close", live)
 				}
 			}
@@ -115,7 +115,7 @@ func TestPanePrefixReaderUniquenessChanges(t *testing.T) {
 		event   liveEvent
 	}{
 		{"ambiguous becomes unique", map[string]string{"prefix-a": "working", "prefix-b": "idle"}, liveEvent{Type: "window-closed", Session: "s", Window: "prefix-b"}},
-		{"closed becomes active", map[string]string{}, liveEvent{Type: "agent-state", Session: "s", Window: "prefix-a", State: "working"}},
+		{"closed becomes active", map[string]string{}, liveEvent{Type: "agent-state", Session: "s", Window: "prefix-a", Status: "working"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := Pane{Window: "prefix-", Session: "s"}
@@ -126,11 +126,11 @@ func TestPanePrefixReaderUniquenessChanges(t *testing.T) {
 			default:
 				t.Fatal("changed prefix resolution did not notify the page")
 			}
-			mapping, err := parseLiveStates(defaultLiveStates)
+			mapping, err := parseLiveStatuses(defaultLiveStatuses)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if live := aggregateLive([]Pane{p}, liveOptions{on: true, mapping: mapping}, r.current([]Pane{p})); live.State != "working" {
+			if live := aggregateLive([]Pane{p}, liveOptions{on: true, mapping: mapping}, r.current([]Pane{p})); live.Status != "working" {
 				t.Fatal(live)
 			}
 		})

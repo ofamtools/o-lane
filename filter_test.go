@@ -29,7 +29,7 @@ func seedFilter(t *testing.T, a *App) {
 			t.Fatal(e)
 		}
 	}
-	if _, e := a.store.State("Old", "done", ""); e != nil {
+	if _, e := a.store.Status("Old", "done", ""); e != nil {
 		t.Fatal(e)
 	}
 }
@@ -53,47 +53,47 @@ func asRows(t *testing.T, v any) []map[string]any {
 	return rows
 }
 
-func TestCLIStateFilter(t *testing.T) {
+func TestCLIStatusFilter(t *testing.T) {
 	f := newCLI(t)
 	f.a.store.BackupDaily = false
 	for _, args := range [][]string{
 		{"add", "Release", "--project", "alpha"}, {"add", "Build", "--parent", "Release"}, {"add", "Docs", "--parent", "Release"},
 		{"add", "Hotfix"}, {"add", "Hotfix tests", "--parent", "Hotfix"}, {"add", "Old"},
-		{"start", "Build"}, {"start", "Hotfix"}, {"state", "Old", "done"},
+		{"start", "Build"}, {"start", "Hotfix"}, {"set", "Old", "status", "done"},
 	} {
 		f.lane(args...)
 	}
-	if got := labels(asRows(t, f.call("lane", "list", "--state", "running")), "name"); got != "Build,Hotfix" {
-		t.Fatal("list --state running:", got)
+	if got := labels(asRows(t, f.call("lane", "list", "--status", "running")), "name"); got != "Build,Hotfix" {
+		t.Fatal("list --status running:", got)
 	}
 	// Comma list; spaces and repeats are ignored.
-	if got := labels(asRows(t, f.call("lane", "list", "--state", "running, done,running")), "name"); got != "Build,Hotfix,Old" {
+	if got := labels(asRows(t, f.call("lane", "list", "--status", "running, done,running")), "name"); got != "Build,Hotfix,Old" {
 		t.Fatal("comma list:", got)
 	}
 	// --json (and MCP) pass the same comma list.
-	if got := labels(asRows(t, f.call("lane", "list", "--json", `{"state":"done"}`)), "name"); got != "Old" {
+	if got := labels(asRows(t, f.call("lane", "list", "--json", `{"status":"done"}`)), "name"); got != "Old" {
 		t.Fatal("json:", got)
 	}
 	// Tree: a matching child keeps its ancestor; a matching root's
 	// non-matching children stay hidden.
-	if got := labels(asRows(t, f.call("lane", "tree", "--state", "running")), "name"); got != "Build,Hotfix,Release" {
-		t.Fatal("tree --state:", got)
+	if got := labels(asRows(t, f.call("lane", "tree", "--status", "running")), "name"); got != "Build,Hotfix,Release" {
+		t.Fatal("tree --status:", got)
 	}
-	if got := labels(asRows(t, f.call("lane", "rows", "--state", "running")), "label"); got != "Build,Hotfix,Release" {
-		t.Fatal("rows --state:", got)
+	if got := labels(asRows(t, f.call("lane", "rows", "--status", "running")), "label"); got != "Build,Hotfix,Release" {
+		t.Fatal("rows --status:", got)
 	}
-	if got := labels(asRows(t, f.call("project", "lanes", "alpha", "--state", "planned")), "name"); got != "Docs,Release" {
-		t.Fatal("project lanes --state:", got)
+	if got := labels(asRows(t, f.call("project", "lanes", "alpha", "--status", "planned")), "name"); got != "Docs,Release" {
+		t.Fatal("project lanes --status:", got)
 	}
-	f.fail(`unknown state "runing"`, "lane", "list", "--state", "runing")
-	f.fail(`unknown state "nope"`, "lane", "rows", "--state", "nope")
-	// lane.state keeps its own state argument (the state to record).
-	if q := f.lane("state", "Docs", "review"); q["state"] != "review" {
+	f.fail(`unknown status "runing"`, "lane", "list", "--status", "runing")
+	f.fail(`unknown status "nope"`, "lane", "rows", "--status", "nope")
+	// lane.status keeps its own status argument (the status to record).
+	if q := f.lane("set", "Docs", "status", "review"); q["status"] != "review" {
 		t.Fatal(q)
 	}
 }
 
-func TestPageStateFilterSetting(t *testing.T) {
+func TestPageStatusFilterSetting(t *testing.T) {
 	a := pageFixture(t)
 	seedFilter(t, a)
 	names := func() string {
@@ -108,41 +108,41 @@ func TestPageStateFilterSetting(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	all := names()
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"running"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"running"}); e != nil {
 		t.Fatal(e)
 	}
 	// Tree order is kept; Docs and Hotfix tests do not match, Old is done.
 	if got := names(); got != "Release,Build,Hotfix" {
-		t.Fatal("state-filter running:", got)
+		t.Fatal("status-filter running:", got)
 	}
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"planned"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"planned"}); e != nil {
 		t.Fatal(e)
 	}
 	// Hotfix (running) stays as the context ancestor of Hotfix tests.
 	if got := names(); got != "Release,Docs,Hotfix,Hotfix tests" {
-		t.Fatal("state-filter planned:", got)
+		t.Fatal("status-filter planned:", got)
 	}
-	if e := a.r.Settings().Set("lanes.state-filter", []any{}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{}); e != nil {
 		t.Fatal(e)
 	}
 	if got := names(); got != all {
 		t.Fatal("empty setting must show all:", got, all)
 	}
 	// The setting composes with the project filter (AND).
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"running"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"running"}); e != nil {
 		t.Fatal(e)
 	}
 	if e := a.r.Settings().Set("lanes.project-filter", "alpha"); e != nil {
 		t.Fatal(e)
 	}
 	if got := names(); got != "Release,Build" {
-		t.Fatal("state and project:", got)
+		t.Fatal("status and project:", got)
 	}
 	// An unknown name in the setting surfaces from lane.rows, not as "no rows".
-	if e := a.r.Settings().Set("lanes.state-filter", []any{"bogus"}); e != nil {
+	if e := a.r.Settings().Set("lanes.status-filter", []any{"bogus"}); e != nil {
 		t.Fatal(e)
 	}
-	if e := a.store.checkStates(a.pageOptions().states); e == nil || !strings.Contains(e.Error(), "bogus") {
+	if e := a.store.checkStatuses(a.pageOptions().statuses); e == nil || !strings.Contains(e.Error(), "bogus") {
 		t.Fatal(e)
 	}
 }
@@ -202,18 +202,18 @@ func TestPagePropFilters(t *testing.T) {
 	if got := shown(); got != "Release,Docs,Build,Hotfix,Hotfix tests" {
 		t.Fatal("present props:", got)
 	}
-	set(ochazuke.PropFilter{Prop: "live_state", Value: ""}, ochazuke.PropFilter{Prop: "rolled_state", Value: "done"})
+	set(ochazuke.PropFilter{Prop: "live_status", Value: ""}, ochazuke.PropFilter{Prop: "rolled_status", Value: "done"})
 	if got := shown(); got != "Old" {
-		t.Fatal("rolled_state:", got)
+		t.Fatal("rolled_status:", got)
 	}
-	// The default "open" saved filter: status differs from every closed state.
+	// The default "open" saved filter: status differs from every closed status.
 	if e = l.ApplyFilter("open"); e != nil {
 		t.Fatal(e)
 	}
 	if got := shown(); got != "Release,Docs,Build,Hotfix,Hotfix tests" {
 		t.Fatal("open:", got)
 	}
-	// Saved filters round-trip through list.filters.
+	// Saved filters round-trip through collection.filters.
 	set(ochazuke.PropFilter{Prop: "status", Value: "running"})
 	if e = l.SaveFilter("active"); e != nil {
 		t.Fatal(e)
@@ -231,9 +231,9 @@ func TestPagePropFilters(t *testing.T) {
 	}
 }
 
-func TestOpenFilterFollowsStates(t *testing.T) {
+func TestOpenFilterFollowsStatuses(t *testing.T) {
 	a := pageFixture(t)
-	if e := a.r.Settings().Set("lanes.states", `[{"name":"todo","open":true},{"name":"shipped","ends":true}]`); e != nil {
+	if e := a.r.Settings().Set("lanes.statuses", `[{"name":"todo","open":true},{"name":"shipped","ends":true}]`); e != nil {
 		t.Fatal(e)
 	}
 	if e := a.configure(); e != nil {
@@ -251,8 +251,8 @@ func TestOpenFilterFollowsStates(t *testing.T) {
 
 // TODO(search-text): ochazuke's ListItem.Search (unreleased, branch
 // release-v075) lets a row carry hidden text the / filter matches. Once
-// o-lane requires that release, give lane rows a Search string (state,
-// live state, project, repo, branch, estimate) through the catalog row and
+// o-lane requires that release, give lane rows a Search string (status,
+// live status, project, repo, branch, estimate) through the catalog row and
 // unskip this test.
 func TestRowSearchText(t *testing.T) {
 	t.Skip("needs ochazuke ListItem.Search (release-v075); o-lane is on v0.72.1")

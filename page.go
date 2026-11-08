@@ -22,23 +22,12 @@ func (a *App) registerPage() error {
 	target.Focus = true
 	target.Noun = "lane"
 	target.From = ochazuke.SourceRow + ":id"
-	// lane.choose-state is an alias of lane.state (see specs). choose-pane is
-	// its own verb: its pane argument is a pane choice ID, not a window label.
+	// choose-pane is its own verb: its pane argument is a pane choice ID, not a window label.
 	a.r.DefineOwn("lane").Verb("choose-pane", a.handler(verbSpec{name: "choose-pane", run: (*App).runLaneChoosePane}), "Choose a tuios window to associate").Agent(ochazuke.AgentAllow).Positional("target", "pane")
 	op := a.r.Operations.At("lane.choose-pane")
 	op.Parameters = map[string]ochazuke.Parameter{"target": target, "pane": {Type: "string", Required: true, Free: true, Source: "pane.choices", Description: "Choose a tuios window to associate"}, // A window closing after the pick never loses the relation.
 		"role": {Type: "string", Source: "pane.roles", Description: "Participant role; default implementer"}}
 	a.r.Operations.Set(op)
-	a.r.DefineOwn("lane").Verb("states", func(c ochazuke.Ctx) ochazuke.Result {
-		if e := a.configure(); e != nil {
-			return done(nil, e)
-		}
-		rows := []ochazuke.Choice{}
-		for _, st := range a.store.stateRows() {
-			rows = append(rows, ochazuke.Choice{ID: st.Name, Label: st.Name})
-		}
-		return done(rows, nil)
-	}, "List configured lifecycle choices").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	a.r.DefineOwn("pane").Verb("choices", func(c ochazuke.Ctx) ochazuke.Result {
 		return ochazuke.Pending(func(ctx context.Context) (any, error) { return a.paneChoices(ctx) }).Replacing("pane-choices")
 	}, "List tuios windows with explicit session references").Fetch().Quiet().Agent(ochazuke.AgentAllow)
@@ -60,10 +49,10 @@ func (a *App) registerPage() error {
 			if project := ochazuke.StringArg(c.Args, "project", ""); project != "" {
 				o.project = project
 			}
-			if states := stateList(c.Args["state"]); len(states) > 0 {
-				o.states = states
+			if statuses := statusList(c.Args["status"]); len(statuses) > 0 {
+				o.statuses = statuses
 			}
-			if e := a.store.checkStates(o.states); e != nil {
+			if e := a.store.checkStatuses(o.statuses); e != nil {
 				return done(nil, e)
 			}
 			o.listHides = listHides
@@ -81,16 +70,16 @@ func (a *App) registerPage() error {
 	}
 	a.r.DefineOwn("lane").Verb("rows", rows(false), "List portable tree page rows").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
 	a.r.DefineOwn("lane").Verb(pageRowsVerb, rows(true), "List the Lanes page's rows: archived lanes kept and flagged for the list to hide or show (same handler and parameters as lane.rows, without archived)").Rows("lane").Fetch().Quiet().Agent(ochazuke.AgentAllow)
-	params := map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "state": stateParam("default lanes.state-filter")}
+	params := map[string]ochazuke.Parameter{"project": param("Only subtrees containing lanes of this project; default lanes.project-filter"), "status": statusParam("default lanes.status-filter")}
 	pageOp := a.r.Operations.At(ochazuke.Key("lane." + pageRowsVerb))
 	pageOp.Parameters = params
 	a.r.Operations.Set(pageOp)
 	rowsOp := a.r.Operations.At("lane.rows")
-	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": params["project"], "state": params["state"], "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a state names an archive state"}}
+	rowsOp.Parameters = map[string]ochazuke.Parameter{"project": params["project"], "status": params["status"], "archived": {Type: ochazuke.SettingBoolean, Description: "Keep archived lanes in the rows, flagged by the archived prop, for a list that hides or shows them itself (the Lanes page); default false leaves them out unless a status names an archive status"}}
 	a.r.Operations.Set(rowsOp)
 	a.r.Define("lane").Columns(a.pageOptions().columns()...)
 	b := a.r.Define("lane").Mode("normal")
-	for _, row := range []struct{ key, verb string }{{"enter", "show"}, {"s", "choose-state"}, {"g p", "focus-pane"}, {"a", "choose-pane"}, {"n", "note"}, {"y", "yank-id"}} {
+	for _, row := range []struct{ key, verb string }{{"enter", "show"}, {"s", "choose-status"}, {"g p", "focus-pane"}, {"a", "choose-pane"}, {"n", "annotate"}, {"y", "yank-id"}} {
 		b.Bind(row.key, ochazuke.Do("lane."+row.verb))
 	}
 	detail := a.r.Define("lane-detail").Pin("normal").Mode("normal")
@@ -116,25 +105,25 @@ type pageOptions struct {
 	liveRows                                                           map[string]Live
 	staleLiveRows                                                      map[string]Live
 	staleFlag                                                          bool
-	groupProjects, projectColumn, nameTone, stateAbout                 bool
+	groupProjects, projectColumn, nameTone, statusAbout                bool
 	project                                                            string
 	hideArchived                                                       bool
 	// listHides leaves archived lanes to the list: the rows carry the archived
-	// prop and list.hide-archived and the archived filter decide what shows.
+	// prop and collection.hide-archived and the archived filter decide what shows.
 	// False is the portable feed (lane rows from the CLI or MCP), which drops
-	// them itself unless the caller names an archive state.
+	// them itself unless the caller names an archive status.
 	listHides    bool
-	states       []string
+	statuses     []string
 	docLinkKinds []string
 }
 
 func (a *App) pageOptions() pageOptions {
 	cfg := a.r.Settings()
 	live, _ := a.liveOptions()
-	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.state-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), stateAbout: cfg.Bool("lanes.state-descriptions"), project: cfg.String("lanes.project-filter"), states: cfg.Strings("lanes.state-filter"), hideArchived: cfg.Bool("list.hide-archived"), listHides: true}
+	return pageOptions{docLinkKinds: cfg.Strings("lanes.doc-link-kinds"), live: live, staleFlag: cfg.Bool("lanes.stale-flag"), liveTones: cfg.Bool("lanes.live-tones"), tree: cfg.Bool("lanes.tree"), guides: true, durations: cfg.Bool("lanes.durations"), panes: cfg.Bool("lanes.pane-column"), history: cfg.Bool("lanes.history-in-detail"), tones: cfg.Bool("lanes.status-tones"), detail: cfg.Bool("lanes.detail"), hideClosed: cfg.Bool("lanes.hide-closed-roots"), now: a.store.now(), groupProjects: cfg.Bool("lanes.group-by-project"), projectColumn: cfg.Bool("lanes.project-column"), nameTone: cfg.Bool("lanes.name-tone"), statusAbout: cfg.Bool("lanes.status-descriptions"), project: cfg.String("lanes.project-filter"), statuses: cfg.Strings("lanes.status-filter"), hideArchived: cfg.Bool("collection.hide-archived"), listHides: true}
 }
 func (o pageOptions) columns() []ochazuke.Column {
-	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "State", Max: 34, Priority: 1}}
+	cols := []ochazuke.Column{{Title: "Name", Min: 16, Pinned: true}, {Title: "Status", Max: 34, Priority: 1}}
 	if o.projectColumn {
 		cols = append(cols, ochazuke.Column{Title: "Project", Max: 24, Priority: 3})
 	}
@@ -153,15 +142,15 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 		return p
 	}
 	fields := []ocli.CatalogDetailField{}
-	for _, name := range []string{"id", "name", "parent", "state", "rolled_state", "live_state", "project", "effective_project", "project_association", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
+	for _, name := range []string{"id", "name", "parent", "status", "rolled_status", "live_status", "project", "effective_project", "project_association", "repo", "base", "branch", "worktree", "estimate", "depends", "plan", "task", "tests", "links", "created", "updated", "started", "finished", "panes"} {
 		label := strings.ReplaceAll(name, "_", " ")
-		if name == "live_state" {
-			// Live state is the panes' and agents' status, not the lane's.
+		if name == "live_status" {
+			// Live status is the panes' and agents' status, not the lane's.
 			label = "agent status"
 		}
 		fields = append(fields, ocli.CatalogDetailField{Label: label, Field: name})
 	}
-	p.Detail = &ocli.CatalogDetail{Fields: []string{"name", "state", "effective_project", "wording", "scope", "done_when", "repo", "branch", "worktree", "estimate", "depends", "links", "panes"}, Sections: []ocli.CatalogDetailSection{
+	p.Detail = &ocli.CatalogDetail{Fields: []string{"name", "status", "effective_project", "wording", "scope", "done_when", "repo", "branch", "worktree", "estimate", "depends", "links", "panes"}, Sections: []ocli.CatalogDetailSection{
 		{Kind: "markdown", Title: "Owner wording", Field: "wording"},
 		{Kind: "markdown", Title: "Scope", Field: "scope"},
 		{Kind: "markdown", Title: "Done when", Field: "done_when"},
@@ -172,10 +161,10 @@ func lanePage(o pageOptions) ocli.CatalogPage {
 		p.Detail.Sections = append([]ocli.CatalogDetailSection{{Kind: "markdown", Field: "stale_reason"}}, p.Detail.Sections...)
 		p.Detail.Fields = append(p.Detail.Fields, "stale_reason")
 	}
-	if o.stateAbout {
-		// Untitled, so a state without a description draws nothing at all.
-		p.Detail.Sections = append([]ocli.CatalogDetailSection{{Kind: "markdown", Field: "state_about"}}, p.Detail.Sections...)
-		p.Detail.Fields = append(p.Detail.Fields, "state_about")
+	if o.statusAbout {
+		// Untitled, so a status without a description draws nothing at all.
+		p.Detail.Sections = append([]ocli.CatalogDetailSection{{Kind: "markdown", Field: "status_about"}}, p.Detail.Sections...)
+		p.Detail.Fields = append(p.Detail.Fields, "status_about")
 	}
 	if o.history {
 		p.Detail.Sections = append(p.Detail.Sections, ocli.CatalogDetailSection{Kind: "thread", Title: "History", Field: "history", Author: "author", At: "at", Body: "body"})
@@ -255,14 +244,14 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 		})
 	}
 	out := []ocli.Row{}
-	kept := stateKept(lanes, o.states)
+	kept := statusKept(lanes, o.statuses)
 	var hidden map[string]bool
 	if !o.listHides {
-		hidden = s.archiveHidden(lanes, o.states, o.hideArchived)
+		hidden = s.archiveHidden(lanes, o.statuses, o.hideArchived)
 	}
-	// A state filter naming an archive state asks for those lanes: the rows
+	// A status filter naming an archive status asks for those lanes: the rows
 	// then do not flag them, so the list's own archive hiding leaves them be.
-	asked := slices.ContainsFunc(o.states, func(name string) bool { return s.states()[name].Archive })
+	asked := slices.ContainsFunc(o.statuses, func(name string) bool { return s.statuses()[name].Archive })
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -276,11 +265,11 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 				continue
 			}
 			v := s.view(q, lanes)
-			if parent == "" && o.hideClosed && !s.states()[q.State].Archive && !s.states()[v.RolledState].Open {
+			if parent == "" && o.hideClosed && !s.statuses()[q.Status].Archive && !s.statuses()[v.RolledStatus].Open {
 				continue
 			}
-			state := v.RolledState
-			cells := []string{q.Name, state}
+			status := v.RolledStatus
+			cells := []string{q.Name, status}
 			if o.projectColumn {
 				project := v.EffectiveProject
 				if project == "" {
@@ -290,16 +279,16 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			}
 			cells = append(cells, q.Repo, q.Estimate)
 			live, hasLive := o.liveRows[q.ID]
-			showLive := hasLive && o.live.on && s.states()[q.State].Open
+			showLive := hasLive && o.live.on && s.statuses()[q.Status].Open
 			if showLive {
-				cells[1] += " · " + live.State
+				cells[1] += " · " + live.Status
 				if live.Glyph != "" {
 					cells[0] = live.Glyph + " " + q.Name
 				}
 			}
 			stale, staleReason := false, ""
 			if activity, ok := o.staleLiveRows[q.ID]; ok && o.live.on {
-				stale, staleReason = staleLane(q, s.states(), activity, o.staleFlag, o.now)
+				stale, staleReason = staleLane(q, s.statuses(), activity, o.staleFlag, o.now)
 			}
 			staleStart := len([]rune(cells[1])) + 3
 			if stale {
@@ -351,11 +340,11 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 							if pane == "" && p.Window != "" && lp.working {
 								pane = p.Window
 							}
-							liveText = " · agent " + lp.State
+							liveText = " · agent " + lp.Status
 							if lp.AgentLive != nil {
-								// An agent's own state and last-activity age sit
+								// An agent's own status and last-activity age sit
 								// beside it in the Agents column.
-								agentLive = " · " + lp.State
+								agentLive = " · " + lp.Status
 								if lp.AgentLive.Activity != nil {
 									agentLive += " " + humanDuration(o.now.Sub(*lp.AgentLive.Activity))
 									liveText += " · active " + lp.AgentLive.Activity.Format(time.RFC3339)
@@ -411,12 +400,12 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			data["doc"], data["pane"] = doc, pane
 			if hasLive && o.live.on {
 				data["live"] = live
-				data["live_state"] = live.State
+				data["live_status"] = live.Status
 			}
 			data["stale"], data["stale_reason"] = stale, staleReason
-			laneFilterValues(data, q, s.states()[q.State].Archive && !asked)
-			if about := stateAbout(q.State, v.StateDescription, v.StateReason); o.stateAbout && about != "" {
-				data["state_about"] = about
+			laneFilterValues(data, q, s.statuses()[q.Status].Archive && !asked)
+			if about := statusAbout(q.Status, v.StatusDescription, v.StatusReason); o.statusAbout && about != "" {
+				data["status_about"] = about
 			}
 			data["pane_detail"] = strings.Join(paneDetail, "\n")
 			if len(paneDetail) == 0 {
@@ -455,24 +444,24 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			if o.tree {
 				row.Parent = q.Parent
 			}
-			// The name takes whichever tone draws the state cell: the live tone
+			// The name takes whichever tone draws the status cell: the live tone
 			// when it is shown, else the lifecycle tone. Both come from data.
 			nameTone := ""
 			if o.tones {
-				nameTone = s.states()[state].Tone
+				nameTone = s.statuses()[status].Tone
 			}
 			if showLive && o.liveTones && live.Tone != "" {
 				nameTone = live.Tone
 			}
 			if o.tones {
-				span := ochazuke.CellTone(1, s.states()[state].Tone)
+				span := ochazuke.CellTone(1, s.statuses()[status].Tone)
 				if showLive {
-					span.To = len([]rune(state))
+					span.To = len([]rune(status))
 				}
 				row.Tones = append(row.Tones, span)
 			}
 			if showLive && o.liveTones && live.Tone != "" {
-				row.Tones = append(row.Tones, ochazuke.SpanTone(1, len([]rune(state))+3, 0, live.Tone))
+				row.Tones = append(row.Tones, ochazuke.SpanTone(1, len([]rune(status))+3, 0, live.Tone))
 				if live.Glyph != "" {
 					row.Tones = append(row.Tones, ochazuke.SpanTone(0, 0, len([]rune(live.Glyph)), live.Tone))
 				}

@@ -8,25 +8,25 @@ import (
 	"ofam.dev/ochazuke"
 )
 
-// State filters (lane list/tree/rows --state, project lanes --state and the
-// lanes.state-filter setting) match a lane's own lifecycle state. In tree
+// Status filters (lane list/tree/rows --status, project lanes --status and the
+// lanes.status-filter setting) match a lane's own lifecycle status. In tree
 // views they follow the same rule as ochazuke's prop filters on a tree: a
 // matching lane keeps its ancestors visible as context, and a matching
 // lane's children show only when they match too. Flat lists show matches
 // only.
 
-func stateParam(fallback string) ochazuke.Parameter {
-	desc := "Only lanes in these lifecycle states (comma list, or a JSON array)"
+func statusParam(fallback string) ochazuke.Parameter {
+	desc := "Only lanes in these lifecycle statuses (comma list, or a JSON array)"
 	if fallback != "" {
 		desc += "; " + fallback
 	}
-	// Free: a comma list is not one choice; checkStates validates each name.
-	return ochazuke.Parameter{Type: "string", Description: desc, Source: "lane.states", Free: true}
+	// Free: a comma list is not one choice; checkStatuses validates each name.
+	return ochazuke.Parameter{Type: "string", Description: desc, Free: true}
 }
 
-// stateList reads a comma list, a JSON array from --json/MCP, or a string
+// statusList reads a comma list, a JSON array from --json/MCP, or a string
 // slice. Blank entries are dropped; order and duplicates do not matter.
-func stateList(v any) []string {
+func statusList(v any) []string {
 	var raw []string
 	switch x := v.(type) {
 	case string:
@@ -47,26 +47,26 @@ func stateList(v any) []string {
 	return out
 }
 
-// checkStates refuses names that are not configured lifecycle states, so a
+// checkStatuses refuses names that are not configured lifecycle statuses, so a
 // typo never reads as "nothing matched".
-func (s *Store) checkStates(states []string) error {
-	known := s.states()
-	for _, name := range states {
+func (s *Store) checkStatuses(statuses []string) error {
+	known := s.statuses()
+	for _, name := range statuses {
 		if _, ok := known[name]; !ok {
 			names := []string{}
-			for _, st := range s.stateRows() {
+			for _, st := range s.statusRows() {
 				names = append(names, st.Name)
 			}
-			return fmt.Errorf("unknown state %q; configured states: %s", name, strings.Join(names, ", "))
+			return fmt.Errorf("unknown status %q; configured statuses: %s", name, strings.Join(names, ", "))
 		}
 	}
 	return nil
 }
 
-// stateKept is the set of lanes a tree view shows under a state filter:
+// statusKept is the set of lanes a tree view shows under a status filter:
 // matches plus their ancestors. nil means no filter (everything shows).
-func stateKept(lanes []Lane, states []string) map[string]bool {
-	if len(states) == 0 {
+func statusKept(lanes []Lane, statuses []string) map[string]bool {
+	if len(statuses) == 0 {
 		return nil
 	}
 	parent := map[string]string{}
@@ -75,7 +75,7 @@ func stateKept(lanes []Lane, states []string) map[string]bool {
 	}
 	kept := map[string]bool{}
 	for _, q := range lanes {
-		if !slices.Contains(states, q.State) {
+		if !slices.Contains(statuses, q.Status) {
 			continue
 		}
 		for id := q.ID; id != "" && !kept[id]; id = parent[id] {
@@ -89,7 +89,7 @@ func stateKept(lanes []Lane, states []string) map[string]bool {
 // = and != conditions compare an empty value rather than failing on a
 // missing key (Spec fields omit empty values in JSON).
 func laneFilterValues(data ochazuke.Thing, q Lane, archived bool) {
-	for _, name := range append([]string{"live_state", "started", "finished", "parent", "effective_project"}, editable...) {
+	for _, name := range append([]string{"live_status", "started", "finished", "parent", "effective_project"}, editable...) {
 		if name == "depends" {
 			continue
 		}
@@ -97,7 +97,7 @@ func laneFilterValues(data ochazuke.Thing, q Lane, archived bool) {
 			data[name] = ""
 		}
 	}
-	data["status"] = q.State
+	data["status"] = q.Status
 	data[archiveProp] = archived
 	data["pane_count"] = len(q.Panes)
 }

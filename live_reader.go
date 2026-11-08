@@ -56,7 +56,7 @@ type liveEvent struct {
 	Host    string `json:"host"`
 	Session string `json:"session"`
 	Window  string `json:"window"`
-	State   string `json:"state"`
+	Status  string `json:"state"` // tuios names this field state
 }
 
 type liveReader struct {
@@ -103,12 +103,12 @@ func (r *liveReader) current(panes []Pane) liveSnapshots {
 	}
 	out := liveSnapshots{}
 	for key, snap := range r.snapshots {
-		copy := liveSnapshot{windows: map[string]string{}, stateTimes: map[string]time.Time{}, err: snap.err}
-		for id, state := range snap.windows {
-			copy.windows[id] = state
+		copy := liveSnapshot{windows: map[string]string{}, statusTimes: map[string]time.Time{}, err: snap.err}
+		for id, status := range snap.windows {
+			copy.windows[id] = status
 		}
-		for id, at := range snap.stateTimes {
-			copy.stateTimes[id] = at
+		for id, at := range snap.statusTimes {
+			copy.statusTimes[id] = at
 		}
 		out[key] = copy
 	}
@@ -156,11 +156,11 @@ func (r *liveReader) apply(event liveEvent) bool {
 	if event.Type == "window-closed" {
 		delete(snap.windows, event.Window)
 	} else {
-		snap.windows[event.Window] = event.State
+		snap.windows[event.Window] = event.Status
 	}
-	// Events do not carry a state-change timestamp. Drop the snapshot time
-	// rather than attaching an old state's time to this observation.
-	delete(snap.stateTimes, event.Window)
+	// Events do not carry a status-change timestamp. Drop the snapshot time
+	// rather than attaching an old status's time to this observation.
+	delete(snap.statusTimes, event.Window)
 	r.snapshots[key] = snap
 	if relevant {
 		r.notify()

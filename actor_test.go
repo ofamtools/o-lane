@@ -57,7 +57,7 @@ func TestOMPHistoryAttributionAndUndoIsolation(t *testing.T) {
 	}
 	a := actor("a")
 	f.a.actor = a
-	f.lane("note", "Work", "from omp")
+	f.lane("annotate", "Work", "from omp")
 	q := mustResolve(t, f.a.store, "Work")
 	if got := q.History[len(q.History)-1].By; got != a {
 		t.Fatalf("history actor %+v, want %+v", got, a)

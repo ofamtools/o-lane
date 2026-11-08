@@ -14,17 +14,17 @@ import (
 
 type Actor = ochazuke.Actor
 
-type State struct {
+type Status struct {
 	Name   string `json:"name"`
 	Tone   string `json:"tone"`
 	Starts bool   `json:"starts"`
 	Ends   bool   `json:"ends"`
 	Open   bool   `json:"open"`
-	// Archive marks the state that carries ochazuke's archive role: lanes in
-	// it are hidden from the default views (list.hide-archived), do not hold
-	// their parent's rolled state, and are what the archived prop reports.
+	// Archive marks the status that carries ochazuke's archive role: lanes in
+	// it are hidden from the default views (collection.hide-archived), do not hold
+	// their parent's rolled status, and are what the archived prop reports.
 	Archive bool `json:"archive,omitempty"`
-	// Description says in plain words what the state means. The Lanes page
+	// Description says in plain words what the status means. The Lanes page
 	// shows it under the focused lane; an empty description shows nothing.
 	Description string `json:"description,omitempty"`
 }
@@ -42,7 +42,7 @@ type Pane struct {
 	Model   string `json:"model,omitempty"`
 	Agent   string `json:"agent,omitempty"`
 	// AgentID names a harness sub-agent (for example a Claude Code subagent)
-	// whose live state comes from lanes.agent-harnesses; AgentSession is the
+	// whose live status comes from lanes.agent-harnesses; AgentSession is the
 	// harness session it runs in, when known.
 	AgentID      string    `json:"agent_id,omitempty"`
 	AgentSession string    `json:"agent_session,omitempty"`
@@ -88,7 +88,7 @@ type Spec struct {
 type Lane struct {
 	Spec
 	ID      string    `json:"id"`
-	State   string    `json:"state"`
+	Status  string    `json:"status"`
 	Created time.Time `json:"created"`
 	Updated time.Time `json:"updated"`
 	Panes   []Pane    `json:"panes"`
@@ -104,24 +104,24 @@ type View struct {
 	Started         *time.Time `json:"started"`
 	Finished        *time.Time `json:"finished"`
 	EstimateMinutes float64    `json:"estimate_minutes"`
-	RolledState     string     `json:"rolled_state"`
+	RolledStatus    string     `json:"rolled_status"`
 	Association     string     `json:"association"`
 	// EffectiveProject is the lane's own project or the nearest ancestor's.
 	EffectiveProject   string `json:"effective_project"`
 	ProjectFrom        string `json:"project_from,omitempty"`
 	ProjectAssociation string `json:"project_association"`
-	// StateDescription is the description of the recorded state from
-	// lanes.states; StateReason is the note that came with the latest state
-	// change (see stateReason).
-	StateDescription string `json:"state_description,omitempty"`
-	StateReason      string `json:"state_reason,omitempty"`
+	// StatusDescription is the description of the recorded status from
+	// lanes.statuses; StatusReason is the note that came with the latest status
+	// change (see statusReason).
+	StatusDescription string `json:"status_description,omitempty"`
+	StatusReason      string `json:"status_reason,omitempty"`
 }
 
 func (s *Store) view(q Lane, rows []Lane) View {
-	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledState: q.State, Association: "unassociated", ProjectAssociation: "unassociated"}
+	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledStatus: q.Status, Association: "unassociated", ProjectAssociation: "unassociated"}
 	v.EffectiveProject, v.ProjectFrom = effectiveProject(rows, q)
-	v.StateDescription = s.states()[q.State].Description
-	v.StateReason = stateReason(q.History)
+	v.StatusDescription = s.statuses()[q.Status].Description
+	v.StatusReason = statusReason(q.History)
 	switch {
 	case v.ProjectFrom == q.ID:
 		v.ProjectAssociation = "associated"
@@ -134,8 +134,8 @@ func (s *Store) view(q Lane, rows []Lane) View {
 		}
 	}
 	for _, e := range activeHistory(q.History) {
-		st, ok := s.states()[e.To]
-		if !ok || st.Archive || (e.Kind != "state" && e.Kind != "create") {
+		st, ok := s.statuses()[e.To]
+		if !ok || st.Archive || (e.Kind != "status" && e.Kind != "create") {
 			continue
 		}
 		at := e.At
@@ -148,20 +148,20 @@ func (s *Store) view(q Lane, rows []Lane) View {
 			v.Finished = nil
 		}
 	}
-	// A homogeneous subtree has that state. Mixed children use the first
-	// configured open state present, then the first configured closed state.
+	// A homogeneous subtree has that status. Mixed children use the first
+	// configured open status present, then the first configured closed status.
 	if q.Parent == "" {
 		present := map[string]bool{}
 		for _, c := range rows {
-			if c.ID != q.ID && !s.states()[c.State].Archive && descendant(rows, c.ID, q.ID) {
-				present[c.State] = true
+			if c.ID != q.ID && !s.statuses()[c.Status].Archive && descendant(rows, c.ID, q.ID) {
+				present[c.Status] = true
 			}
 		}
 		if len(present) > 0 {
 			for _, open := range []bool{true, false} {
-				for _, st := range s.stateRows() {
+				for _, st := range s.statusRows() {
 					if st.Open == open && present[st.Name] {
-						v.RolledState = st.Name
+						v.RolledStatus = st.Name
 						return v
 					}
 				}
@@ -187,18 +187,18 @@ func estimateMinutes(text string) float64 {
 	}
 	return n
 }
-func parseStates(raw string) ([]State, error) {
-	var out []State
+func parseStatuses(raw string) ([]Status, error) {
+	var out []Status
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
 		return nil, err
 	}
 	if len(out) == 0 {
-		return nil, errors.New("lanes.states must contain at least one state")
+		return nil, errors.New("lanes.statuses must contain at least one status")
 	}
 	seen := map[string]bool{}
 	for _, s := range out {
 		if strings.TrimSpace(s.Name) == "" || seen[s.Name] {
-			return nil, fmt.Errorf("invalid or duplicate state %q", s.Name)
+			return nil, fmt.Errorf("invalid or duplicate status %q", s.Name)
 		}
 		seen[s.Name] = true
 	}
@@ -243,14 +243,14 @@ func activeHistory(history []Entry) []Entry {
 	return out
 }
 
-// stateReason is why the lane is in its state: the latest state change's own
-// note, else the latest note event recorded between the previous state change
-// and that one (agents often write the reason as a note, then change state).
-func stateReason(history []Entry) string {
+// statusReason is why the lane is in its status: the latest status change's own
+// note, else the latest note event recorded between the previous status change
+// and that one (agents often write the reason as a note, then change status).
+func statusReason(history []Entry) string {
 	h := activeHistory(history)
 	last := -1
 	for i := len(h) - 1; i >= 0; i-- {
-		if h[i].Kind == "state" || h[i].Kind == "create" {
+		if h[i].Kind == "status" || h[i].Kind == "create" {
 			last = i
 			break
 		}
@@ -262,7 +262,7 @@ func stateReason(history []Entry) string {
 		return text
 	}
 	for i := last - 1; i >= 0; i-- {
-		if h[i].Kind == "state" || h[i].Kind == "create" {
+		if h[i].Kind == "status" || h[i].Kind == "create" {
 			break
 		}
 		if text := strings.TrimSpace(h[i].Text); h[i].Kind == "note" && text != "" {
@@ -272,9 +272,9 @@ func stateReason(history []Entry) string {
 	return ""
 }
 
-// stateAbout is the detail text for a lane's state: the state name, its
-// description and the reason. A state without a description shows nothing.
-func stateAbout(name, description, reason string) string {
+// statusAbout is the detail text for a lane's status: the status name, its
+// description and the reason. A status without a description shows nothing.
+func statusAbout(name, description, reason string) string {
 	if strings.TrimSpace(description) == "" {
 		return ""
 	}

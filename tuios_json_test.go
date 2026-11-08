@@ -20,13 +20,13 @@ func tuiosSample(t *testing.T, command, shape string) []byte {
 
 func TestTuiosListEmptyAndInvalid(t *testing.T) {
 	for _, data := range []string{"[]", `{"windows":[]}`, "null", `{"windows":null}`, " \n [] \t"} {
-		rows, err := decodeTuiosList[windowState]([]byte(data), "windows")
+		rows, err := decodeTuiosList[windowStatus]([]byte(data), "windows")
 		if err != nil || len(rows) != 0 {
 			t.Fatalf("%q: rows = %v, err = %v", data, rows, err)
 		}
 	}
 	for _, data := range []string{"", "[", `{"windows":`, `{"success":true}`, `{"windows":{}}`, `{"windows":[{"window_id":1}]}`, `[] []`} {
-		if _, err := decodeTuiosList[windowState]([]byte(data), "windows"); err == nil {
+		if _, err := decodeTuiosList[windowStatus]([]byte(data), "windows"); err == nil {
 			t.Fatalf("accepted invalid listing %q", data)
 		}
 	}
@@ -95,9 +95,9 @@ func TestLiveSnapshotsTuiosShapes(t *testing.T) {
 				}
 				return tuiosSample(t, "list-windows", shape), nil
 			})
-			for _, want := range []struct{ session, state string }{{"hub", "idle"}, {"other", "working"}} {
+			for _, want := range []struct{ session, status string }{{"hub", "idle"}, {"other", "working"}} {
 				snap := snapshots[liveScope{Session: want.session}]
-				if snap.err != nil || snap.windows["fixture-window"] != want.state {
+				if snap.err != nil || snap.windows["fixture-window"] != want.status {
 					t.Fatalf("%s snapshot = %+v", want.session, snap)
 				}
 			}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -11,8 +12,11 @@ import (
 // Reuse the framework's standard typed set/get verbs, including multi-property
 // writes and property shorthand. Domain-only operations keep explicit verbs.
 // archiveProp is the lane prop with the archive role; its value is whether
-// the lane's state row carries archive:true.
+// the lane's status row carries archive:true.
 const archiveProp = "archived"
+
+// statusProp is the lane prop that holds the lifecycle status.
+const statusProp = "status"
 
 func (a *App) declareProps() {
 	props := []ochazuke.PropSpec{{Name: "id", Parameter: ochazuke.Parameter{Type: "string"}, Key: true}}
@@ -25,11 +29,15 @@ func (a *App) declareProps() {
 	}
 	props = append(props, filterProps()...)
 	// Writable archive-role prop: ochazuke derives archive/restore, the
-	// archived saved filter and list.hide-archived from it; a write moves the
-	// lane to or from the lanes.states row with archive:true (setArchived).
-	props = append(props, ochazuke.PropSpec{Name: archiveProp, Role: ochazuke.RoleArchive, Parameter: ochazuke.Parameter{Type: ochazuke.SettingBoolean, Description: "In the archive state (the lanes.states row with archive:true); writing it archives or restores the lane"}})
-	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.stateRows()), ochazuke.SavedFilter{Name: "stale", Noun: "lane", Conditions: []ochazuke.PropFilter{{Prop: "stale", Value: true}}})
-	a.r.Define("lane").Store(ochazuke.Store{Kind: ochazuke.Collection,
+	// archived saved filter and collection.hide-archived from it; a write moves the
+	// lane to or from the lanes.statuses row with archive:true (setArchived).
+	props = append(props, ochazuke.PropSpec{Name: archiveProp, Role: ochazuke.RoleArchive, Parameter: ochazuke.Parameter{Type: ochazuke.SettingBoolean, Description: "In the archive status (the lanes.statuses row with archive:true); writing it archives or restores the lane"}})
+	// The lifecycle status: writing it records a status change (lane status
+	// done, lane set status=done); its Enum is lanes.statuses, kept in step
+	// by refreshStatusEnum.
+	props = append(props, ochazuke.PropSpec{Name: statusProp, Parameter: ochazuke.Parameter{Type: ochazuke.SettingString, Enum: statusNames(a.store.statusRows()), Description: "Lifecycle status (a lanes.statuses row); writing it records a status change in the lane's history"}})
+	a.r.Define("lane").Props(props...).Filters(openFilter(a.store.statusRows()), ochazuke.SavedFilter{Name: "stale", Noun: "lane", Conditions: []ochazuke.PropFilter{{Prop: "stale", Value: true}}})
+	a.r.Define("lane").Store(ochazuke.Store{Kind: ochazuke.KindCollection,
 		Get: func(c ochazuke.Ctx, id string) (ochazuke.Thing, error) {
 			if e := a.configure(); e != nil {
 				return nil, e
@@ -40,7 +48,7 @@ func (a *App) declareProps() {
 			}
 			t, e := ochazuke.ThingOf(q)
 			if e == nil {
-				t[archiveProp] = a.store.states()[q.State].Archive
+				t[archiveProp] = a.store.statuses()[q.Status].Archive
 			}
 			return t, e
 		},
@@ -57,6 +65,12 @@ func (a *App) declareProps() {
 				slices.Sort(keys)
 				edited := false
 				for _, key := range keys {
+					if key == statusProp {
+						if e := a.store.status(q, fmt.Sprint(changes[key]), ""); e != nil {
+							return e
+						}
+						continue
+					}
 					if key == archiveProp {
 						on, e := archiveFlag(changes[key])
 						if e != nil {
@@ -85,7 +99,7 @@ func (a *App) declareProps() {
 			}
 			t, e := ochazuke.ThingOf(q)
 			if e == nil {
-				t[archiveProp] = a.store.states()[q.State].Archive
+				t[archiveProp] = a.store.statuses()[q.Status].Archive
 			}
 			return t, e
 		},
@@ -99,26 +113,23 @@ func (a *App) declareProps() {
 }
 
 // filterProps are the read-only props a lane row carries for prop filters
-// (z / on the page, saved filters in list.filters). Domain verbs own their
-// writes (state, rename, move, associate), so set never writes these.
+// (z / on the page, saved filters in collection.filters). Domain verbs own their
+// writes (status, rename, move, associate), so set never writes these.
 // Values come from the page row's data (laneFilterValues).
 func filterProps() []ochazuke.PropSpec {
 	out := []ochazuke.PropSpec{}
 	for _, row := range []struct{ name, kind, desc string }{
 		{"name", "string", "Lane name"},
 		{"parent", "string", "Parent lane ID; empty for a root"},
-		// "state" is the lane.state verb, and a word after a noun is a verb
-		// or a prop, never both; status carries the lifecycle state.
-		{"status", "string", "Lifecycle state (the state field; lane.state records it)"},
-		{"rolled_state", "string", "Subtree rollup of lifecycle states"},
-		{"live_state", "string", "Aggregate live pane state; empty when live reading is off"},
+		{"rolled_status", "string", "Subtree rollup of lifecycle statuses"},
+		{"live_status", "string", "Aggregate live pane status; empty when live reading is off"},
 		{"effective_project", "string", "The lane's project or the nearest ancestor's"},
 		{"created", "string", "Creation time (RFC 3339)"},
 		{"updated", "string", "Last change (RFC 3339)"},
 		{"started", "string", "First start (RFC 3339); empty when never started"},
 		{"finished", "string", "Finish time (RFC 3339); empty while open"},
 		{"pane_count", ochazuke.SettingInteger, "Associated panes"},
-		{"stale", ochazuke.SettingBoolean, "Working lifecycle state with no working participant; false when live reads or stale flags are off"},
+		{"stale", ochazuke.SettingBoolean, "Working lifecycle status with no working participant; false when live reads or stale flags are off"},
 	} {
 		out = append(out, ochazuke.PropSpec{Name: row.name, ReadOnly: true, Parameter: ochazuke.Parameter{Type: row.kind, Description: row.desc}})
 	}
@@ -126,15 +137,54 @@ func filterProps() []ochazuke.PropSpec {
 }
 
 // openConditions is the default "open" saved filter: status differs from
-// every configured closed state (states without open), ANDed. The rows are
-// the lanes.states in force when the noun is declared; a user list.filters
+// every configured closed status (statuses without open), ANDed. The rows are
+// the lanes.statuses in force when the noun is declared; a user collection.filters
 // row named "open" replaces it.
-func openFilter(states []State) ochazuke.SavedFilter {
-	return ochazuke.SavedFilter{Name: "open", Noun: "lane", Conditions: openConditions(states)}
+func openFilter(statuses []Status) ochazuke.SavedFilter {
+	return ochazuke.SavedFilter{Name: "open", Noun: "lane", Conditions: openConditions(statuses)}
+}
+
+// statusNames are the names of the configured status rows.
+func statusNames(rows []Status) []string {
+	out := make([]string, 0, len(rows))
+	for _, st := range rows {
+		out = append(out, st.Name)
+	}
+	return out
+}
+
+// statusFilterOps are the operations whose status parameter filters by
+// lifecycle status; refreshStatusEnum offers them the configured names.
+var statusFilterOps = []ochazuke.Key{"lane.choose-status", "lane.list", "lane.tree", "lane.rows", "lane." + pageRowsVerb, "project.lanes"}
+
+// refreshStatusEnum keeps the status prop's Enum and the status filter
+// parameters' choices in step with the configured lanes.statuses (configure
+// runs before every request).
+func (a *App) refreshStatusEnum() {
+	names := statusNames(a.store.statusRows())
+	if n := a.r.Noun("lane"); n != nil {
+		for i := range n.Props {
+			if n.Props[i].Name == statusProp {
+				n.Props[i].Enum = slices.Clone(names)
+			}
+		}
+	}
+	for _, key := range statusFilterOps {
+		op, ok := a.r.Operations.Find(key)
+		if !ok {
+			continue
+		}
+		if p, ok := op.Parameters["status"]; ok {
+			p.Enum = slices.Clone(names)
+			op.Parameters = maps.Clone(op.Parameters)
+			op.Parameters["status"] = p
+			a.r.Operations.Set(op)
+		}
+	}
 }
 
 // refreshOpenFilter keeps the declared "open" filter in step with the
-// configured lanes.states (configure runs before every request).
+// configured lanes.statuses (configure runs before every request).
 func (a *App) refreshOpenFilter() {
 	n := a.r.Noun("lane")
 	if n == nil {
@@ -142,14 +192,14 @@ func (a *App) refreshOpenFilter() {
 	}
 	for i, f := range n.Filters {
 		if f.Name == "open" {
-			n.Filters[i] = openFilter(a.store.stateRows())
+			n.Filters[i] = openFilter(a.store.statusRows())
 		}
 	}
 }
 
-func openConditions(states []State) []ochazuke.PropFilter {
+func openConditions(statuses []Status) []ochazuke.PropFilter {
 	out := []ochazuke.PropFilter{}
-	for _, st := range states {
+	for _, st := range statuses {
 		if !st.Open {
 			out = append(out, ochazuke.PropFilter{Prop: "status", Op: "!=", Value: st.Name})
 		}

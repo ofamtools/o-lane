@@ -11,8 +11,8 @@ import (
 	"ofam.dev/ochazuke"
 )
 
-// LiveState is presentation data, shared by the CLI and portable page.
-type LiveState struct {
+// LiveStatus is presentation data, shared by the CLI and portable page.
+type LiveStatus struct {
 	Name    string `json:"name"`
 	Tone    string `json:"tone,omitempty"`
 	Glyph   string `json:"glyph,omitempty"`
@@ -20,60 +20,60 @@ type LiveState struct {
 }
 type LivePane struct {
 	Pane
-	// AgentLive is an agent participant's derived state, when agents are read.
+	// AgentLive is an agent participant's derived status, when agents are read.
 	AgentLive      *AgentStatus `json:"agent_live,omitempty"`
-	State          string       `json:"live"`
+	Status         string       `json:"live"`
 	Tone           string       `json:"tone,omitempty"`
 	Glyph          string       `json:"glyph,omitempty"`
 	Error          string       `json:"error,omitempty"`
-	StateSince     *time.Time   `json:"state_since,omitempty"`
+	StatusSince    *time.Time   `json:"status_since,omitempty"`
 	known, working bool
 }
 type Live struct {
-	State string     `json:"state"`
-	Tone  string     `json:"tone,omitempty"`
-	Glyph string     `json:"glyph,omitempty"`
-	Panes []LivePane `json:"panes"`
+	Status string     `json:"status"`
+	Tone   string     `json:"tone,omitempty"`
+	Glyph  string     `json:"glyph,omitempty"`
+	Panes  []LivePane `json:"panes"`
 }
-type windowState struct {
-	Window  string `json:"window_id"`
-	State   string `json:"agent_state"`
-	StateAt int64  `json:"agent_state_at"`
+type windowStatus struct {
+	Window   string `json:"window_id"`
+	Status   string `json:"agent_state"`
+	StatusAt int64  `json:"agent_state_at"`
 }
 type commandRunner func(context.Context, []string) ([]byte, error)
 type liveOptions struct {
 	on                bool
-	mapping           map[string]LiveState
+	mapping           map[string]LiveStatus
 	roles, precedence []string
-	// agent reads an agent participant's state; nil leaves agents unread.
+	// agent reads an agent participant's status; nil leaves agents unread.
 	agent func(Pane) AgentStatus
 }
 
 // String values from the L2 settings remain accepted for existing users.
-func parseLiveStates(text string) (map[string]LiveState, error) {
+func parseLiveStatuses(text string) (map[string]LiveStatus, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(text), &raw); err != nil {
 		return nil, err
 	}
 	if raw == nil {
-		return nil, errors.New("lanes.live-states needs a JSON object")
+		return nil, errors.New("lanes.live-statuses needs a JSON object")
 	}
-	out := map[string]LiveState{}
+	out := map[string]LiveStatus{}
 	// Label-only overrides retain the activity semantics from the default
 	// data. An object can explicitly override working, including to false.
-	defaults := map[string]LiveState{}
-	_ = json.Unmarshal([]byte(defaultLiveStates), &defaults)
+	defaults := map[string]LiveStatus{}
+	_ = json.Unmarshal([]byte(defaultLiveStatuses), &defaults)
 	for key, value := range raw {
-		state := LiveState{Working: defaults[key].Working}
-		if json.Unmarshal(value, &state.Name) != nil {
-			if err := json.Unmarshal(value, &state); err != nil {
+		status := LiveStatus{Working: defaults[key].Working}
+		if json.Unmarshal(value, &status.Name) != nil {
+			if err := json.Unmarshal(value, &status); err != nil {
 				return nil, err
 			}
 		}
-		if strings.TrimSpace(state.Name) == "" {
-			return nil, errors.New("lanes.live-states rows need a name")
+		if strings.TrimSpace(status.Name) == "" {
+			return nil, errors.New("lanes.live-statuses rows need a name")
 		}
-		out[key] = state
+		out[key] = status
 	}
 	return out, nil
 }
@@ -84,7 +84,7 @@ func (a *App) liveOptions() (liveOptions, error) {
 		return o, nil
 	}
 	var err error
-	o.mapping, err = parseLiveStates(cfg.String("lanes.live-states"))
+	o.mapping, err = parseLiveStatuses(cfg.String("lanes.live-statuses"))
 	if err == nil && cfg.Bool("lanes.agent-live") {
 		o.agent = a.agentReader()
 	}
@@ -144,9 +144,9 @@ func (a *App) associatedPanes(q Lane) ([]Pane, error) {
 
 type liveScope struct{ Host, Session string }
 type liveSnapshot struct {
-	windows    map[string]string
-	stateTimes map[string]time.Time
-	err        error
+	windows     map[string]string
+	statusTimes map[string]time.Time
+	err         error
 }
 type liveSnapshots map[liveScope]liveSnapshot
 
@@ -196,7 +196,7 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 		if _, ok := out[key]; ok {
 			continue
 		}
-		snap := liveSnapshot{windows: map[string]string{}, stateTimes: map[string]time.Time{}}
+		snap := liveSnapshot{windows: map[string]string{}, statusTimes: map[string]time.Time{}}
 		if p.Session == "" {
 			snap.err = errors.New("pane session is unassociated")
 		} else {
@@ -209,12 +209,12 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 			cancel()
 			snap.err = err
 			if err == nil {
-				windows, err := decodeTuiosList[windowState](b, "windows")
+				windows, err := decodeTuiosList[windowStatus](b, "windows")
 				snap.err = err
 				for _, w := range windows {
-					snap.windows[w.Window] = w.State
-					if w.StateAt != 0 {
-						snap.stateTimes[w.Window] = time.Unix(0, w.StateAt).UTC()
+					snap.windows[w.Window] = w.Status
+					if w.StatusAt != 0 {
+						snap.statusTimes[w.Window] = time.Unix(0, w.StatusAt).UTC()
 					}
 				}
 			}
@@ -224,28 +224,28 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner) liv
 	return out
 }
 func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
-	out := Live{State: "unassociated", Panes: []LivePane{}}
+	out := Live{Status: "unassociated", Panes: []LivePane{}}
 	if !o.on {
-		out.State = "off"
+		out.Status = "off"
 		return out
 	}
-	states := map[string]LivePane{}
+	statuses := map[string]LivePane{}
 	for _, p := range panes {
-		item := LivePane{Pane: p, State: "unassociated"}
+		item := LivePane{Pane: p, Status: "unassociated"}
 		if p.AgentID != "" && o.agent != nil {
 			st := o.agent(p)
 			item.AgentLive = &st
 			item.Error = st.Error
-			mapped, ok := o.mapping[st.State]
+			mapped, ok := o.mapping[st.Status]
 			if !ok {
-				mapped.Name = st.State
+				mapped.Name = st.Status
 			}
-			item.State, item.Tone, item.Glyph = mapped.Name, mapped.Tone, mapped.Glyph
+			item.Status, item.Tone, item.Glyph = mapped.Name, mapped.Tone, mapped.Glyph
 			item.known, item.working = ok, mapped.Working
 		} else if p.Window != "" {
 			snap, ok := snapshots[scopeOf(p)]
 			if !ok || snap.err != nil {
-				item.State = "unknown"
+				item.Status = "unknown"
 				if snap.err != nil {
 					item.Error = snap.err.Error()
 				}
@@ -262,29 +262,29 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 						st.Name = "shell"
 					}
 				}
-				item.State, item.Tone, item.Glyph = st.Name, st.Tone, st.Glyph
+				item.Status, item.Tone, item.Glyph = st.Name, st.Tone, st.Glyph
 				item.known, item.working = ok, st.Working
-				if at, ok := snap.stateTimes[id]; ok {
-					item.StateSince = &at
+				if at, ok := snap.statusTimes[id]; ok {
+					item.StatusSince = &at
 				}
 			}
 		}
 		out.Panes = append(out.Panes, item)
 		if len(o.roles) == 0 || slices.Contains(o.roles, p.Role) {
-			states[item.State] = item
+			statuses[item.Status] = item
 		}
 	}
 	winner := ""
 	for _, name := range o.precedence {
-		if _, ok := states[name]; ok {
+		if _, ok := statuses[name]; ok {
 			winner = name
 			break
 		}
 	}
 	if winner == "" {
-		// Unknown/custom states have deterministic fallback ordering as well.
-		names := make([]string, 0, len(states))
-		for name := range states {
+		// Unknown/custom statuses have deterministic fallback ordering as well.
+		names := make([]string, 0, len(statuses))
+		for name := range statuses {
 			if name != "unassociated" {
 				names = append(names, name)
 			}
@@ -295,8 +295,8 @@ func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 		}
 	}
 	if winner != "" {
-		p := states[winner]
-		out.State, out.Tone, out.Glyph = p.State, p.Tone, p.Glyph
+		p := statuses[winner]
+		out.Status, out.Tone, out.Glyph = p.Status, p.Tone, p.Glyph
 	}
 	return out
 }
@@ -365,7 +365,7 @@ func (a *App) focusPane(c ochazuke.Ctx, q Lane, role string) ochazuke.Result {
 			}
 		}
 		for _, p := range candidates {
-			if p.State == live.State {
+			if p.Status == live.Status {
 				selected = p
 				break
 			}
@@ -404,7 +404,7 @@ func (a *App) enrichLive(views []View) error {
 		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
 		views[i].Live = &v
 		activity := aggregateLive(a.store.stalePanes(rows, views[i].Lane), o, snapshots)
-		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.states(), activity, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
+		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.statuses(), activity, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
 	}
 	return nil
 }

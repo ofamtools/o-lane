@@ -12,14 +12,14 @@ import (
 )
 
 func TestStaleEvidence(t *testing.T) {
-	mapping, err := parseLiveStates(defaultLiveStates)
+	mapping, err := parseLiveStatuses(defaultLiveStatuses)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 1, 1, 13, 0, 0, 0, time.UTC)
-	states := map[string]State{"building": {Starts: true}, "running": {Open: true}}
+	statuses := map[string]Status{"building": {Starts: true}, "running": {Open: true}}
 	for _, tc := range []struct {
-		name, state               string
+		name, status              string
 		raw                       []string
 		on, enabled, failed, want bool
 	}{
@@ -39,7 +39,7 @@ func TestStaleEvidence(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			panes := []Pane{{Window: "w", Session: "s", Role: "reviewer"}}
-			snap := liveSnapshot{windows: map[string]string{}, stateTimes: map[string]time.Time{"w": now}}
+			snap := liveSnapshot{windows: map[string]string{}, statusTimes: map[string]time.Time{"w": now}}
 			for i, raw := range tc.raw {
 				if i > 0 {
 					panes = append(panes, Pane{Window: "w2", Session: "s", Role: "implementer"})
@@ -50,7 +50,7 @@ func TestStaleEvidence(t *testing.T) {
 				snap.err = errors.New("offline")
 			}
 			live := aggregateLive(panes, liveOptions{on: tc.on, mapping: mapping, roles: []string{"implementer"}}, liveSnapshots{{Session: "s"}: snap})
-			got, reason := staleLane(Lane{State: tc.state}, states, live, tc.enabled, now)
+			got, reason := staleLane(Lane{Status: tc.status}, statuses, live, tc.enabled, now)
 			if got != tc.want || (reason != "") != tc.want {
 				t.Fatalf("stale=%v reason=%q", got, reason)
 			}
@@ -60,7 +60,7 @@ func TestStaleEvidence(t *testing.T) {
 		})
 	}
 	for _, custom := range []string{`{"working":"busy"}`, `{"working":{"name":"busy"}}`, `{"custom":{"name":"busy","working":true}}`} {
-		m, e := parseLiveStates(custom)
+		m, e := parseLiveStatuses(custom)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -146,41 +146,41 @@ func TestStaleRowsCLIAndFilters(t *testing.T) {
 }
 
 func TestStaleParticipantOwnershipAndAgents(t *testing.T) {
-	mapping, err := parseLiveStates(defaultLiveStates)
+	mapping, err := parseLiveStatuses(defaultLiveStatuses)
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	states := map[string]State{"running": {Starts: true}}
+	statuses := map[string]Status{"running": {Starts: true}}
 	old := Pane{Window: "w", Session: "s", Since: now.Add(-time.Minute)}
 	newer := old
 	newer.Since = now
-	q := Lane{ID: "old", State: "running", Panes: []Pane{old}}
+	q := Lane{ID: "old", Status: "running", Panes: []Pane{old}}
 	s := &Store{}
 	rows := []Lane{q, {ID: "new", Panes: []Pane{newer}}}
 	o := liveOptions{on: true, mapping: mapping}
 	snap := liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "working"}}}
-	if stale, _ := staleLane(q, states, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); !stale {
+	if stale, _ := staleLane(q, statuses, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); !stale {
 		t.Fatal("old pane holder still counts activity")
 	}
 	s.PanesShared = true
-	if stale, _ := staleLane(q, states, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); stale {
+	if stale, _ := staleLane(q, statuses, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); stale {
 		t.Fatal("shared pane activity ignored")
 	}
 	q.Panes = []Pane{{AgentID: "a", Harness: "custom"}}
-	for _, state := range []string{"working", "idle", "done", "missing"} {
-		o.agent = func(Pane) AgentStatus { return AgentStatus{State: state} }
-		got, _ := staleLane(q, states, aggregateLive(q.Panes, o, nil), true, now)
-		if got != (state != "working") {
-			t.Fatal(state, got)
+	for _, status := range []string{"working", "idle", "done", "missing"} {
+		o.agent = func(Pane) AgentStatus { return AgentStatus{Status: status} }
+		got, _ := staleLane(q, statuses, aggregateLive(q.Panes, o, nil), true, now)
+		if got != (status != "working") {
+			t.Fatal(status, got)
 		}
 	}
 	o.agent = nil
-	if got, _ := staleLane(q, states, aggregateLive(q.Panes, o, nil), true, now); got {
+	if got, _ := staleLane(q, statuses, aggregateLive(q.Panes, o, nil), true, now); got {
 		t.Fatal("unread agent treated as inactive")
 	}
-	o.agent = func(Pane) AgentStatus { return AgentStatus{State: "missing", Error: "unreadable agent evidence"} }
-	if got, _ := staleLane(q, states, aggregateLive(q.Panes, o, nil), true, now); got {
+	o.agent = func(Pane) AgentStatus { return AgentStatus{Status: "missing", Error: "unreadable agent evidence"} }
+	if got, _ := staleLane(q, statuses, aggregateLive(q.Panes, o, nil), true, now); got {
 		t.Fatal("failed agent read treated as proof of inactivity")
 	}
 }
@@ -188,26 +188,26 @@ func TestStaleParticipantOwnershipAndAgents(t *testing.T) {
 func TestStaleReaderTimestampInvalidation(t *testing.T) {
 	p := Pane{Window: "w", Session: "s"}
 	at := time.Now().Add(-time.Hour)
-	r := newLiveReader(nil, []Pane{p}, liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "idle"}, stateTimes: map[string]time.Time{"w": at}}})
+	r := newLiveReader(nil, []Pane{p}, liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "idle"}, statusTimes: map[string]time.Time{"w": at}}})
 	snap := r.current([]Pane{p})
-	if !snap[scopeOf(p)].stateTimes["w"].Equal(at) {
+	if !snap[scopeOf(p)].statusTimes["w"].Equal(at) {
 		t.Fatal("snapshot time lost")
 	}
 	// current must copy the timestamp map just as it copies windows.
-	delete(snap[scopeOf(p)].stateTimes, "w")
-	if r.current([]Pane{p})[scopeOf(p)].stateTimes["w"].IsZero() {
+	delete(snap[scopeOf(p)].statusTimes, "w")
+	if r.current([]Pane{p})[scopeOf(p)].statusTimes["w"].IsZero() {
 		t.Fatal("snapshot map leaked")
 	}
-	r.apply(liveEvent{Type: "agent-state", Session: "s", Window: "w", State: "done"})
-	if !r.current([]Pane{p})[scopeOf(p)].stateTimes["w"].IsZero() {
-		t.Fatal("previous state's time survived transition")
+	r.apply(liveEvent{Type: "agent-state", Session: "s", Window: "w", Status: "done"})
+	if !r.current([]Pane{p})[scopeOf(p)].statusTimes["w"].IsZero() {
+		t.Fatal("previous status's time survived transition")
 	}
 }
 
 func TestStaleWorkingDescendants(t *testing.T) {
 	for _, tc := range []struct {
-		name, descendantState, raw string
-		want                       bool
+		name, descendantStatus, raw string
+		want                        bool
 	}{
 		{"working grandchild", "running", "working", false},
 		{"waiting grandchild", "running", "needs_input", false},
@@ -223,7 +223,7 @@ func TestStaleWorkingDescendants(t *testing.T) {
 			f.lane("add", "Worker", "--parent", "Middle")
 			f.lane("start", "Root")
 			f.lane("start", "Parent")
-			f.lane("state", "Worker", tc.descendantState)
+			f.lane("set", "Worker", "status", tc.descendantStatus)
 			f.lane("associate", "Worker", "--pane", "w1", "--session", "s", "--role", "reviewer")
 			if e := f.a.r.Settings().Set("lanes.live-roles", []string{"implementer"}); e != nil {
 				t.Fatal(e)
@@ -255,9 +255,9 @@ func TestStaleWorkingDescendants(t *testing.T) {
 func TestStaleWaitingActivityMapping(t *testing.T) {
 	// tuios uses needs_input for approval, question and auth waits. Test both
 	// legacy label overrides and object rows against the same activity defaults.
-	for _, setting := range []string{defaultLiveStates, `{"needs_input":"waiting"}`, `{"needs_input":{"name":"awaiting person"}}`} {
+	for _, setting := range []string{defaultLiveStatuses, `{"needs_input":"waiting"}`, `{"needs_input":{"name":"awaiting person"}}`} {
 		f := newCLI(t)
-		if e := f.a.r.Settings().Set("lanes.live-states", setting); e != nil {
+		if e := f.a.r.Settings().Set("lanes.live-statuses", setting); e != nil {
 			t.Fatal(e)
 		}
 		f.lane("add", "Waiting")

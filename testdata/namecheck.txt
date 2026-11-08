@@ -13,16 +13,16 @@ app.go	App.specs	case	"pane"	1
 app.go	App.specs	case	"project"	1
 app.go	newApp	compare	"lane"	1
 changes.go	Store.defineFields	cyclo	"-"	26
-changes.go	Store.restoreState	compare	"state"	1
+changes.go	Store.restoreStatus	compare	"status"	1
 changes.go	setSpec	compare	"depends"	1
 filter.go	laneFilterValues	compare	"depends"	1
 live_reader.go	liveReader.Run	cyclo	"-"	26
 model.go	Store.view	compare	"create"	1	history entry kind written by the store (state or create), not the core create verb
-model.go	Store.view	compare	"state"	1
+model.go	Store.view	compare	"status"	1
 model.go	activeHistory	compare	"undo"	1
-model.go	stateReason	compare	"create"	2	history entry kind written by the store (state or create), not the core create verb
-model.go	stateReason	compare	"note"	1
-model.go	stateReason	compare	"state"	2
+model.go	statusReason	compare	"create"	2	history entry kind written by the store (status or create), not the core create verb
+model.go	statusReason	compare	"note"	1
+model.go	statusReason	compare	"status"	2
 page.go	projectLaneRows	cyclo	"-"	87
 plan.go	App.define	cyclo	"-"	28
 plan.go	parseImportColumns	compare	"name"	2
@@ -32,7 +32,9 @@ plan.go	parsePlan	compare	"name"	3
 plan.go	parsePlan	cyclo	"-"	33
 props.go	App.declareProps	compare	"archived"	1
 props.go	App.declareProps	compare	"depends"	1
+props.go	App.declareProps	compare	"status"	1	the status prop writes a status change; the archived prop beside it is the same kind of row
 props.go	App.refreshOpenFilter	compare	"open"	1
+props.go	App.refreshStatusEnum	compare	"status"	1	the status prop and the status filter parameters take the configured lanes.statuses names as choices
 props.go	archiveFlag	case	"on"	1
 store.go	changedLanes	compare	"undo"	1
 tui.go	mountPage	compare	"lane"	1

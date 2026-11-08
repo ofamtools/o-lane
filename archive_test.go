@@ -18,10 +18,10 @@ func listed(t *testing.T, f *cliFixture, key string, args ...string) string {
 func TestArchiveHidesAndRestores(t *testing.T) {
 	f := newCLI(t)
 	f.a.store.BackupDaily = false
-	for _, args := range [][]string{{"add", "Release"}, {"add", "Build", "--parent", "Release"}, {"add", "Old"}, {"state", "Old", "review"}} {
+	for _, args := range [][]string{{"add", "Release"}, {"add", "Build", "--parent", "Release"}, {"add", "Old"}, {"set", "Old", "status", "review"}} {
 		f.lane(args...)
 	}
-	if q := f.lane("archive", "Old"); q["state"] != "archived" {
+	if q := f.lane("archive", "Old"); q["status"] != "archived" {
 		t.Fatal(q)
 	}
 	// Hidden from the unfiltered list, the tree, the page rows and project lanes.
@@ -34,15 +34,15 @@ func TestArchiveHidesAndRestores(t *testing.T) {
 	if got := listed(t, f, "label", "lane", "rows"); got != "Build,Release" {
 		t.Fatal("rows:", got)
 	}
-	// Other state filters keep hiding it; an explicit archived state shows it.
-	if got := listed(t, f, "name", "lane", "list", "--state", "review,planned"); got != "Build,Release" {
+	// Other status filters keep hiding it; an explicit archived status shows it.
+	if got := listed(t, f, "name", "lane", "list", "--status", "review,planned"); got != "Build,Release" {
 		t.Fatal("other filter:", got)
 	}
-	if got := listed(t, f, "name", "lane", "list", "--state", "archived"); got != "Old" {
-		t.Fatal("--state archived:", got)
+	if got := listed(t, f, "name", "lane", "list", "--status", "archived"); got != "Old" {
+		t.Fatal("--status archived:", got)
 	}
-	if got := listed(t, f, "label", "lane", "rows", "--state", "archived"); got != "Old" {
-		t.Fatal("rows --state archived:", got)
+	if got := listed(t, f, "label", "lane", "rows", "--status", "archived"); got != "Old" {
+		t.Fatal("rows --status archived:", got)
 	}
 	// The archive role: get reports the prop; the declared filter exists; open excludes it.
 	if q := f.lane("get", "Old"); q["archived"] != true {
@@ -62,14 +62,14 @@ func TestArchiveHidesAndRestores(t *testing.T) {
 	if !excluded {
 		t.Fatal("open filter keeps archived", filters["open"])
 	}
-	// Restore returns the lane to the state it had before archiving.
+	// Restore returns the lane to the status it had before archiving.
 	f.call("lane", "set", "Old", "archived=false")
-	if q := f.lane("show", "Old"); q["state"] != "review" {
-		t.Fatal("restore:", q["state"])
+	if q := f.lane("show", "Old"); q["status"] != "review" {
+		t.Fatal("restore:", q["status"])
 	}
-	// list.hide-archived off shows archived lanes everywhere.
-	f.lane("state", "Old", "archived")
-	if _, e := f.a.r.Settings().SetSession("list.hide-archived", false); e != nil {
+	// collection.hide-archived off shows archived lanes everywhere.
+	f.lane("set", "Old", "status", "archived")
+	if _, e := f.a.r.Settings().SetSession("collection.hide-archived", false); e != nil {
 		t.Fatal(e)
 	}
 	if got := listed(t, f, "name", "lane", "list"); got != "Build,Old,Release" {
@@ -82,23 +82,23 @@ func TestArchiveSetPropAndRepeat(t *testing.T) {
 	f.lane("add", "A")
 	f.lane("finish", "A")
 	f.call("lane", "set", "A", "archived=true")
-	f.lane("archive", "A") // again: restore still finds the real previous state
+	f.lane("archive", "A") // again: restore still finds the real previous status
 	f.call("lane", "set", "A", "archived=false")
-	if q := f.lane("show", "A"); q["state"] != "done" {
-		t.Fatal(q["state"])
+	if q := f.lane("show", "A"); q["status"] != "done" {
+		t.Fatal(q["status"])
 	}
 	// Restoring a lane that was never archived changes nothing; one archived
-	// straight from creation falls back to the first open state.
+	// straight from creation falls back to the first open status.
 	f.call("lane", "set", "A", "archived=false")
 	f.lane("add", "B")
-	f.lane("state", "B", "archived")
+	f.lane("set", "B", "status", "archived")
 	f.call("lane", "set", "B", "archived=false")
-	if q := f.lane("show", "B"); q["state"] != "planned" {
-		t.Fatal(q["state"])
+	if q := f.lane("show", "B"); q["status"] != "planned" {
+		t.Fatal(q["status"])
 	}
 }
 
-func TestArchiveRolledStateIgnoresArchivedChildren(t *testing.T) {
+func TestArchiveRolledStatusIgnoresArchivedChildren(t *testing.T) {
 	f := newCLI(t)
 	f.a.store.BackupDaily = false
 	f.lane("add", "Root")
@@ -106,12 +106,12 @@ func TestArchiveRolledStateIgnoresArchivedChildren(t *testing.T) {
 	f.lane("add", "Dropped", "--parent", "Root")
 	f.lane("finish", "Done child")
 	f.lane("start", "Dropped")
-	if q := f.lane("show", "Root"); q["rolled_state"] != "running" {
-		t.Fatal(q["rolled_state"])
+	if q := f.lane("show", "Root"); q["rolled_status"] != "running" {
+		t.Fatal(q["rolled_status"])
 	}
 	f.lane("archive", "Dropped")
-	if q := f.lane("show", "Root"); q["rolled_state"] != "done" {
-		t.Fatalf("archived child kept the parent open: %v", q["rolled_state"])
+	if q := f.lane("show", "Root"); q["rolled_status"] != "done" {
+		t.Fatalf("archived child kept the parent open: %v", q["rolled_status"])
 	}
 	// Archiving a finished lane keeps its finished time.
 	f.lane("archive", "Done child")
@@ -123,29 +123,29 @@ func TestArchiveRolledStateIgnoresArchivedChildren(t *testing.T) {
 }
 
 func TestArchiveStaleIgnoresArchived(t *testing.T) {
-	states, _ := parseStates(defaultStates)
-	st := map[string]State{}
-	for _, x := range states {
+	statuses, _ := parseStatuses(defaultStatuses)
+	st := map[string]Status{}
+	for _, x := range statuses {
 		st[x.Name] = x
 	}
-	if stale, _ := staleLane(Lane{State: "archived"}, st, Live{State: "idle"}, true, time.Now()); stale {
+	if stale, _ := staleLane(Lane{Status: "archived"}, st, Live{Status: "idle"}, true, time.Now()); stale {
 		t.Fatal("archived lane flagged stale")
 	}
 }
 
-func TestArchiveWithoutStateRow(t *testing.T) {
+func TestArchiveWithoutStatusRow(t *testing.T) {
 	f := newCLI(t)
-	// An older saved lanes.states without the archive row keeps working.
-	if _, e := f.a.r.Settings().SetSession("lanes.states", `[{"name":"planned","open":true},{"name":"done","ends":true}]`); e != nil {
+	// An older saved lanes.statuses without the archive row keeps working.
+	if _, e := f.a.r.Settings().SetSession("lanes.statuses", `[{"name":"planned","open":true},{"name":"done","ends":true}]`); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.a.r.Settings().SetSession("lanes.state-presets", `{"finish":"done"}`); e != nil {
+	if _, e := f.a.r.Settings().SetSession("lanes.status-presets", `{"finish":"done"}`); e != nil {
 		t.Fatal(e)
 	}
 	f.lane("add", "Plain")
 	f.fail("archive:true", "lane", "set", "Plain", "archived=true")
-	f.fail("lanes.state-presets", "lane", "archive", "Plain")
-	f.fail("unknown state", "lane", "state", "Plain", "archived")
+	f.fail("lanes.status-presets", "lane", "archive", "Plain")
+	f.fail("must be one of", "lane", "set", "Plain", "status", "archived")
 	f.call("lane", "set", "Plain", "archived=false") // not archived: nothing to do
 	if got := listed(t, f, "name", "lane", "list"); got != "Plain" {
 		t.Fatal(got)

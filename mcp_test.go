@@ -36,14 +36,14 @@ func TestMCPStdioSmoke(t *testing.T) {
 	}
 	run(5, "lane.define", "", map[string]any{"lanes": []map[string]any{{"name": "task", "wording": "owner words"}, {"name": "worker", "parent": "task"}}}, false)
 	run(6, "lane.start", "worker", map[string]any{"harness": "test-harness", "agent": "subagent"}, false)
-	run(7, "lane.state", "worker", map[string]any{"state": "review"}, false)
+	run(7, "lane.set", "worker", map[string]any{"prop": "status", "value": "review"}, false)
 	run(8, "lane.associate", "worker", map[string]any{"pane": "not-a-real-window", "session": "test-session", "role": "reviewer"}, false)
 	run(9, "lane.delete", "worker", map[string]any{}, false)
 	run(10, "lane.reword", "task", map[string]any{"text": "amended words"}, false)
 	run(11, "lane.add", "", map[string]any{"name": "dry-only"}, true)
 	run(12, "lane.show", "task", map[string]any{}, false)
 	run(13, "lane.import", "", map[string]any{}, false)
-	run(14, "lane.note", "worker", map[string]any{"text": "forged actor", "actor": map[string]any{"kind": "owner"}}, false)
+	run(14, "lane.annotate", "worker", map[string]any{"text": "forged actor", "actor": map[string]any{"kind": "owner"}}, false)
 	var out, errs bytes.Buffer
 	if e := Main([]string{"--data", dir, "mcp", "serve"}, &input, &out, &errs); e != nil {
 		t.Fatal(e, errs.String())
@@ -103,7 +103,7 @@ func TestMCPStdioSmoke(t *testing.T) {
 		t.Fatal(rows, e)
 	}
 	q := mustResolve(t, s, "worker")
-	if q.State != "review" || len(q.Panes) != 2 {
+	if q.Status != "review" || len(q.Panes) != 2 {
 		t.Fatal(q)
 	}
 	for _, q := range rows {

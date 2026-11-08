@@ -86,9 +86,9 @@ func TestStoreLifecycleDerived(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	s.Now = func() time.Time { return at }
 	q := mustAdd(t, s, Spec{Name: "demo", Estimate: "1.5 h 30 min"})
-	for _, state := range []string{"done", "planned", "running", "parked", "review", "merged", "running", "done"} {
+	for _, status := range []string{"done", "planned", "running", "parked", "review", "merged", "running", "done"} {
 		at = at.Add(time.Minute)
-		if _, e := s.State(q.ID, state, "free transition"); e != nil {
+		if _, e := s.Status(q.ID, status, "free transition"); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -110,7 +110,7 @@ func TestStoreRecovery(t *testing.T) {
 	s := testStore(t)
 	q := mustAdd(t, s, Spec{Name: "original"})
 	before, _ := s.List()
-	_, e := s.Note(q.ID, "survive a crash")
+	_, e := s.Annotate(q.ID, "survive a crash")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -204,7 +204,7 @@ func TestStoreAgentUndo(t *testing.T) {
 	s := testStore(t)
 	q := mustAdd(t, s, Spec{Name: "owned"})
 	s.Actor = Actor{Kind: "agent", Name: "worker", Harness: "test", Pane: "w", Session: "s"}
-	if _, e := s.Note(q.ID, "mine"); e != nil {
+	if _, e := s.Annotate(q.ID, "mine"); e != nil {
 		t.Fatal(e)
 	}
 	if e := s.Undo(); e != nil {
@@ -232,7 +232,7 @@ func TestStoreBackups(t *testing.T) {
 	s.Now = func() time.Time { return at }
 	q := mustAdd(t, s, Spec{Name: "backup"})
 	for i := 0; i < 3; i++ {
-		if _, e := s.Note(q.ID, "entry"); e != nil {
+		if _, e := s.Annotate(q.ID, "entry"); e != nil {
 			t.Fatal(e)
 		}
 		at = at.Add(24 * time.Hour)
@@ -246,7 +246,7 @@ func TestStoreLockProcess(t *testing.T) {
 	if dir := os.Getenv("O_LANE_TEST_CHILD"); dir != "" {
 		s := &Store{Dir: dir, Actor: ochazuke.Owner()}
 		for i := 0; i < 8; i++ {
-			if _, e := s.Note("root", fmt.Sprint(os.Getpid(), "-", i)); e != nil {
+			if _, e := s.Annotate("root", fmt.Sprint(os.Getpid(), "-", i)); e != nil {
 				t.Fatal(e)
 			}
 		}

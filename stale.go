@@ -8,16 +8,16 @@ import (
 
 // Staleness considers current participants on the lane and working descendants,
 // independent of role filters and presentation labels. Unknown evidence
-// cannot prove that nobody is working. It never changes state or history.
+// cannot prove that nobody is working. It never changes status or history.
 func (s *Store) stalePanes(rows []Lane, q Lane) []Pane {
-	states := s.states()
+	statuses := s.statuses()
 	return s.panesInSubtreeWhere(rows, q, func(row Lane) bool {
-		return states[row.State].Starts
+		return statuses[row.Status].Starts
 	})
 }
 
-func staleLane(q Lane, states map[string]State, live Live, enabled bool, now time.Time) (bool, string) {
-	if !enabled || q.Deleted || !states[q.State].Starts || live.State == "off" {
+func staleLane(q Lane, statuses map[string]Status, live Live, enabled bool, now time.Time) (bool, string) {
+	if !enabled || q.Deleted || !statuses[q.Status].Starts || live.Status == "off" {
 		return false, ""
 	}
 	parts := []string{}
@@ -29,11 +29,11 @@ func staleLane(q Lane, states map[string]State, live Live, enabled bool, now tim
 		if p.AgentID != "" {
 			who = "agent " + p.AgentID
 		}
-		when := " (observed " + now.UTC().Format(time.RFC3339) + "; state-change time unavailable)"
-		if p.StateSince != nil {
-			when = " since " + p.StateSince.UTC().Format(time.RFC3339)
+		when := " (observed " + now.UTC().Format(time.RFC3339) + "; status-change time unavailable)"
+		if p.StatusSince != nil {
+			when = " since " + p.StatusSince.UTC().Format(time.RFC3339)
 		}
-		parts = append(parts, fmt.Sprintf("%s is %s%s", who, p.State, when))
+		parts = append(parts, fmt.Sprintf("%s is %s%s", who, p.Status, when))
 	}
 	if len(parts) == 0 {
 		parts = append(parts, "no pane or agent is associated")

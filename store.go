@@ -16,16 +16,16 @@ import (
 )
 
 // The o-questions lock/snapshot/WAL pattern, with one file per root tree.
-// A transaction includes its undo receipt, so recovery cannot lose undo state.
+// A transaction includes its undo receipt, so recovery cannot lose undo status.
 type Store struct {
-	Dir          string
-	Actor        Actor
-	Now          func() time.Time
-	States       []State
-	StatePresets map[string]string
-	Warn         func(string)
-	BackupDaily  bool
-	BackupKeep   int
+	Dir           string
+	Actor         Actor
+	Now           func() time.Time
+	Statuses      []Status
+	StatusPresets map[string]string
+	Warn          func(string)
+	BackupDaily   bool
+	BackupKeep    int
 	// PanesShared lets one pane belong to several lanes at once
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
 	PanesShared bool
@@ -60,16 +60,16 @@ func (s *Store) remove(p string) error {
 	}
 	return os.Remove(p)
 }
-func (s *Store) stateRows() []State {
-	if len(s.States) > 0 {
-		return s.States
+func (s *Store) statusRows() []Status {
+	if len(s.Statuses) > 0 {
+		return s.Statuses
 	}
-	rows, _ := parseStates(defaultStates)
+	rows, _ := parseStatuses(defaultStatuses)
 	return rows
 }
-func (s *Store) states() map[string]State {
-	out := map[string]State{}
-	for _, x := range s.stateRows() {
+func (s *Store) statuses() map[string]Status {
+	out := map[string]Status{}
+	for _, x := range s.statusRows() {
 		out[x.Name] = x
 	}
 	return out
@@ -213,6 +213,9 @@ func (s *Store) all() ([]Lane, error) {
 			return nil, e
 		}
 		var rows []Lane
+		if b, e = migrateLegacy(b); e != nil {
+			return nil, fmt.Errorf("%s: %w", f, e)
+		}
 		if e = json.Unmarshal(b, &rows); e != nil {
 			return nil, fmt.Errorf("%s: %w", f, e)
 		}
@@ -376,6 +379,9 @@ func (s *Store) Undo() error {
 				return e
 			}
 			var snap Snapshot
+			if b, e = migrateLegacy(b); e != nil {
+				return e
+			}
 			if e = json.Unmarshal(b, &snap); e != nil {
 				return e
 			}
@@ -458,7 +464,7 @@ func restoreWithAudit(s *Store, current []Lane, snap Snapshot, changes []UndoCha
 			restored.Deleted = true
 		}
 		restored.History = q.History
-		s.entry(&restored, "undo", q.State, restored.State, "Undid "+snap.Action, nil, nil)
+		s.entry(&restored, "undo", q.Status, restored.Status, "Undid "+snap.Action, nil, nil)
 		restored.History[len(restored.History)-1].Undo = &UndoRecord{Action: snap.Action, OriginalActor: snap.By, Entries: change.Entries}
 		out[i] = restored
 	}
