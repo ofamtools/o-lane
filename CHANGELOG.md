@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Changed: requires ochazuke v0.109.0 (esc only leaves insert in modals and `q` closes them; label-first pickers).
+- Changed: the pane variables are read as `MTM_X` first, then `TUIOS_X` (mtm sets both for one release): `ENV`, `SESSION`, `PANE_ID`, `HARNESS`, `AGENT_NAME`, through one `paneEnv` helper.
+
 ## v0.3.1 (2026-11-08)
 
 - Changed: the Lanes page draws a whole row in its status tone (every cell, as per-cell tones so the mounted mtm page draws them too), not only the status cell. Planned (no tone) rows stay default, archived rows keep their dim tone, the cursor highlight still wins, and live, stale and name tones still layer on top. Setting `lanes.status-tone-scope` = `row` (default) or `cell` (the old status-cell-only look); `lanes.status-tones` false still turns colour off.
