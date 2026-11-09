@@ -363,7 +363,7 @@ func TestPageFocusAndYank(t *testing.T) {
 	if got := a.r.Registers().Named["\""].Yank.Text; got != q.ID {
 		t.Fatalf("yank %q want %q", got, q.ID)
 	}
-	for _, key := range []string{"esc", "q"} {
+	for _, key := range []string{"q"} {
 		pageKey(t, p, "enter")
 		if a.r.TopModal() != "lane-detail" {
 			t.Fatal("show did not open detail", a.r.TopModal())

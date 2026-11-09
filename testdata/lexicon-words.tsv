@@ -907,3 +907,11 @@ zoom-in	action	seed
 zoom-out	action	seed	
 zoom-reset	action	seed	
 lane-detail	noun	yes	o-lane page detail pane noun
+first	action	seed	ochazuke v0.110 edge motion
+hide	action	seed	ochazuke v0.110
+last	action	seed	ochazuke v0.110 edge motion
+move-down	action	seed	ochazuke v0.110
+move-up	action	seed	ochazuke v0.110
+referrer	noun	seed	ochazuke v0.110 Referrers
+related	noun	seed	ochazuke v0.110 related sections
+related-section	noun	seed	ochazuke v0.110 related sections

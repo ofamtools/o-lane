@@ -39,7 +39,7 @@
       "after": 3,
       "contains": [
         "Worker",
-        "fixture-session"
+        "fixture-window"
       ]
     },
     {
