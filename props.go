@@ -26,11 +26,11 @@ const reasonProp = "reason"
 func (a *App) declareProps() {
 	props := []ochazuke.PropSpec{{Name: "id", Parameter: ochazuke.Parameter{Type: "string"}, Key: true}}
 	for _, name := range editable {
-		kind := "string"
+		param := ochazuke.Parameter{Type: "string"}
 		if name == "depends" {
-			kind = ochazuke.SettingList
+			param.Type = ochazuke.SettingList
 		}
-		props = append(props, ochazuke.PropSpec{Name: name, Parameter: ochazuke.Parameter{Type: kind}})
+		props = append(props, ochazuke.PropSpec{Name: name, Parameter: withRef(name, param)})
 	}
 	props = append(props, filterProps()...)
 	// Writable archive-role prop: ochazuke derives archive/restore, the
@@ -87,6 +87,30 @@ func (a *App) declareProps() {
 	}
 }
 
+// refProps are the lane props whose stored value is the key of a thing of a
+// noun, so the relation graph can follow them: one declaration shape (Noun,
+// plus HostNoun for a noun of the program that mounts the catalog), one table,
+// no per-prop branch. A prop is listed only when its stored value is the
+// target noun's key: parent holds a lane id; task holds an mtm task id.
+// Not listed, with why: project (stored as a name, an id
+// or kind:id; mtm keys by id), repo, branch and worktree (names and paths; the
+// git nouns key by "repo/PATH"), and the pane association (a list of
+// objects, not a prop of one key).
+var refProps = map[string]ochazuke.Parameter{
+	"parent": {Noun: "lane"},
+	"task":   {Noun: "task", HostNoun: "task"},
+}
+
+// withRef adds a prop's reference declaration (refProps) to its parameter. A
+// reference is Free: a key that names nothing (a dead task, a deleted
+// parent) is kept as written, never refused.
+func withRef(name string, p ochazuke.Parameter) ochazuke.Parameter {
+	if ref, ok := refProps[name]; ok {
+		p.Noun, p.HostNoun, p.Free = ref.Noun, ref.HostNoun, true
+	}
+	return p
+}
+
 // filterProps are the read-only props a lane row carries for prop filters
 // (z / on the page, saved filters in collection.filters). Domain verbs own their
 // writes (status, rename, move, associate), so set never writes these.
@@ -106,7 +130,7 @@ func filterProps() []ochazuke.PropSpec {
 		{"pane_count", ochazuke.SettingInteger, "Associated panes"},
 		{"stale", ochazuke.SettingBoolean, "Working lifecycle status with no working participant; false when live reads or stale flags are off"},
 	} {
-		out = append(out, ochazuke.PropSpec{Name: row.name, ReadOnly: true, Parameter: ochazuke.Parameter{Type: row.kind, Description: row.desc}})
+		out = append(out, ochazuke.PropSpec{Name: row.name, ReadOnly: true, Parameter: withRef(row.name, ochazuke.Parameter{Type: row.kind, Description: row.desc})})
 	}
 	return out
 }

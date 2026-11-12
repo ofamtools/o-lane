@@ -363,6 +363,10 @@ func TestPageFocusAndYank(t *testing.T) {
 	if got := a.r.Registers().Named["\""].Yank.Text; got != q.ID {
 		t.Fatalf("yank %q want %q", got, q.ID)
 	}
+	// Since ochazuke v0.113 esc closes a modal only with modal.esc-closes.
+	if e := a.r.Settings().Set("modal.esc-closes", true); e != nil {
+		t.Fatal(e)
+	}
 	for _, key := range []string{"esc", "q"} {
 		pageKey(t, p, "enter")
 		if a.r.TopModal() != "lane-detail" {

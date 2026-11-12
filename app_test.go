@@ -53,3 +53,35 @@ func TestCatalog(t *testing.T) {
 		t.Fatalf("catalog: %s", out.String())
 	}
 }
+
+func TestCatalogTypesLaneReferences(t *testing.T) {
+	dir := fixture(t)
+	var out, errs bytes.Buffer
+	if err := Main([]string{"--data", dir, "catalog"}, &bytes.Buffer{}, &out, &errs); err != nil {
+		t.Fatal(err, errs.String())
+	}
+	var doc struct {
+		Nouns []struct {
+			Name  string
+			Props []struct{ Name, Noun, HostNoun string }
+		}
+	}
+	if err := json.Unmarshal(out.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][2]string{}
+	for _, n := range doc.Nouns {
+		if n.Name != "lane" {
+			continue
+		}
+		for _, p := range n.Props {
+			got[p.Name] = [2]string{p.Noun, p.HostNoun}
+		}
+	}
+	want := map[string][2]string{"parent": {"lane", ""}, "task": {"task", "task"}, "project": {"", ""}, "repo": {"", ""}, "branch": {"", ""}, "worktree": {"", ""}}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("lane.%s declares noun/hostNoun %v, want %v", name, got[name], w)
+		}
+	}
+}
