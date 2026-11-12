@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -78,17 +80,50 @@ func (s *Store) backup(to string, daily bool) (string, error) {
 	if e = syncDir(to); e != nil {
 		return "", e
 	}
-	if daily && s.BackupKeep > 0 {
-		files, e := filepath.Glob(filepath.Join(to, "????-??-??.tar.gz"))
-		if e != nil {
-			return "", e
-		}
-		for len(files) > s.BackupKeep {
-			if e = s.remove(files[0]); e != nil {
-				return "", e
-			}
-			files = files[1:]
-		}
+	if daily {
+		s.retain(to, "????-??-??.tar.gz", s.BackupKeep)
 	}
 	return path, nil
+}
+
+// retain keeps the newest keep files matching pattern in dir (names sort
+// oldest first) and removes the rest through the injectable remove function.
+// A failure warns and never fails the caller. It lists names only and never reads contents; keep 0 keeps everything.
+// Each removal stands alone, so an interrupted pass resumes on the next call.
+func (s *Store) retain(dir, pattern string, keep int) {
+	if keep <= 0 {
+		return
+	}
+	files, e := filepath.Glob(filepath.Join(dir, pattern))
+	if e != nil {
+		s.warnRetain(dir, e)
+		return
+	}
+	for len(files) > keep {
+		if e = s.remove(files[0]); e != nil && !errors.Is(e, os.ErrNotExist) {
+			s.warnRetain(dir, e)
+			return
+		}
+		files = files[1:]
+	}
+}
+
+// warnRetain reports a failed prune; the change that triggered it stays saved.
+func (s *Store) warnRetain(dir string, e error) {
+	msg := fmt.Sprintf("warning: retention in %s failed (change kept): %v", dir, e)
+	if s.Warn != nil {
+		s.Warn(msg)
+	} else {
+		fmt.Fprintln(os.Stderr, msg)
+	}
+}
+
+// nothingToUndo says plainly when retention removed the older history.
+func nothingToUndo(files []string, keep int) error {
+	if len(files) > 0 {
+		if n, e := strconv.Atoi(strings.TrimSuffix(filepath.Base(files[0]), ".json")); e == nil && n > 1 {
+			return fmt.Errorf("nothing more to undo: older changes were removed by history.keep (%d)", keep)
+		}
+	}
+	return errors.New("nothing to undo")
 }

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added: the lane's `parent` prop is a reference to a lane and its `task` prop a reference to the host's `task` (`hostNoun`), so ochazuke's relation graph follows them (a mounted mtm reads `lane.task` as a reference to mtm's task; a key that names nothing stays as written). `project`, `repo`, `branch` and `worktree` stay plain strings: they are stored as names or paths, not as the target noun's key. Requires ochazuke v0.114.0 (`hostNoun`); the family word list copy is refreshed.
+- Added: setting `history.keep` (default 200, `0` keeps everything) bounds the undo history (`.history/`): the write that adds an entry removes all but the newest N (names only, never entry contents; oldest first, so an interrupted pass resumes), numbering never resets, and undo past the retained range reports `nothing more to undo: older changes were removed by history.keep`. Daily backups already pruned to `backup.keep` (test `TestStoreBackups`); they now share one retention function with history.
 
 ## v0.3.1 (2026-11-08)
 
