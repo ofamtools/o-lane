@@ -94,7 +94,7 @@ func TestStaleRowsCLIAndFilters(t *testing.T) {
 	if got := f.lane("show", "Idle"); got["stale"] != true || !strings.Contains(got["stale_reason"].(string), "since 2026-01-01T13:00:00Z") {
 		t.Fatal(got)
 	}
-	rows, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run)
+	rows, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run, tuiosPaneCommands())
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -129,7 +129,7 @@ func TestStaleRowsCLIAndFilters(t *testing.T) {
 		if got := f.call("lane", "list", "--stale").([]any); len(got) != 0 {
 			t.Fatal(setting, got)
 		}
-		off, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run)
+		off, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run, tuiosPaneCommands())
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -188,7 +188,7 @@ func TestStaleParticipantOwnershipAndAgents(t *testing.T) {
 func TestStaleReaderTimestampInvalidation(t *testing.T) {
 	p := Pane{Window: "w", Session: "s"}
 	at := time.Now().Add(-time.Hour)
-	r := newLiveReader(nil, []Pane{p}, liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "idle"}, statusTimes: map[string]time.Time{"w": at}}})
+	r := newLiveReader(nil, tuiosPaneCommands(), []Pane{p}, liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "idle"}, statusTimes: map[string]time.Time{"w": at}}})
 	snap := r.current([]Pane{p})
 	if !snap[scopeOf(p)].statusTimes["w"].Equal(at) {
 		t.Fatal("snapshot time lost")
@@ -236,7 +236,7 @@ func TestStaleWorkingDescendants(t *testing.T) {
 					t.Fatalf("%s stale=%v want %v", name, got["stale"], tc.want)
 				}
 			}
-			rows, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run)
+			rows, e := loadLaneRows(context.Background(), f.a.store, f.a.pageOptions(), nil, f.a.run, tuiosPaneCommands())
 			if e != nil {
 				t.Fatal(e)
 			}

@@ -33,7 +33,7 @@ func newCLI(t *testing.T) *cliFixture {
 	calls := [][]string{}
 	a.run = func(_ context.Context, argv []string) ([]byte, error) {
 		calls = append(calls, append([]string{}, argv...))
-		if len(argv) > 1 && argv[1] == "focus-window" {
+		if len(argv) > 1 && argv[1] == "pane" && len(argv) > 2 && argv[2] == "switch" {
 			return nil, nil
 		}
 		return []byte(`{"windows":[{"window_id":"w1","agent_state":"working"},{"window_id":"w2","agent_state":"needs_input"}]}`), nil
@@ -115,7 +115,7 @@ func TestCLIVerbs(t *testing.T) {
 	f.lane("focus-pane", "child")
 	found := false
 	for _, cmd := range *f.calls {
-		if reflect.DeepEqual(cmd, []string{"tuios", "focus-window", "-s", "s", "w2"}) {
+		if reflect.DeepEqual(cmd, []string{"mtm", "pane", "switch", "--session", "s", "--window", "w2"}) {
 			found = true
 		}
 	}

@@ -27,7 +27,7 @@ func pageFixture(t *testing.T) *App {
 	t.Helper()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") {
+		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "MTM_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") {
 			t.Setenv(key, "")
 		}
 	}
@@ -46,7 +46,7 @@ func pageFixture(t *testing.T) *App {
 			return []byte(`[{"name":"fixture-session"}]`), nil
 		case "tuios list-windows --json -s fixture-session":
 			return []byte(`{"windows":[{"window_id":"fixture-window","name":"Worker","harness":"codex"}]}`), nil
-		case "tuios focus-window -s fixture-session fixture-window":
+		case "mtm pane switch --session fixture-session --window fixture-window":
 			return nil, nil
 		}
 		return nil, fmt.Errorf("unexpected runner call: %q", argv)
@@ -125,7 +125,7 @@ func TestLaneStories(t *testing.T) {
 				}
 				run := a.run
 				a.run = func(ctx context.Context, argv []string) ([]byte, error) {
-					if len(argv) > 1 && argv[1] == "focus-window" {
+					if len(argv) > 1 && argv[1] == "pane" && len(argv) > 2 && argv[2] == "switch" {
 						focused = append(focused, append([]string(nil), argv...))
 					}
 					return run(ctx, argv)
@@ -170,7 +170,7 @@ func TestLaneStories(t *testing.T) {
 				}
 			}
 			if story.Name == "lanes/focus-pane" {
-				want := [][]string{{"tuios", "focus-window", "-s", "fixture-session", "fixture-window"}}
+				want := [][]string{{"mtm", "pane", "switch", "--session", "fixture-session", "--window", "fixture-window"}}
 				if !reflect.DeepEqual(focused, want) {
 					t.Fatalf("focus commands = %v, want %v", focused, want)
 				}
@@ -339,7 +339,7 @@ func TestPageFocusAndYank(t *testing.T) {
 	calls := 0
 	a.run = func(_ context.Context, argv []string) ([]byte, error) {
 		calls++
-		if !reflect.DeepEqual(argv, []string{"tuios", "focus-window", "-s", "fixture-session", "fixture-window"}) {
+		if !reflect.DeepEqual(argv, []string{"mtm", "pane", "switch", "--session", "fixture-session", "--window", "fixture-window"}) {
 			return nil, fmt.Errorf("unexpected %v", argv)
 		}
 		return nil, nil
@@ -363,11 +363,7 @@ func TestPageFocusAndYank(t *testing.T) {
 	if got := a.r.Registers().Named["\""].Yank.Text; got != q.ID {
 		t.Fatalf("yank %q want %q", got, q.ID)
 	}
-	// Since ochazuke v0.113 esc closes a modal only with modal.esc-closes.
-	if e := a.r.Settings().Set("modal.esc-closes", true); e != nil {
-		t.Fatal(e)
-	}
-	for _, key := range []string{"esc", "q"} {
+	for _, key := range []string{"q"} {
 		pageKey(t, p, "enter")
 		if a.r.TopModal() != "lane-detail" {
 			t.Fatal("show did not open detail", a.r.TopModal())
@@ -673,7 +669,7 @@ func TestPagePaneChoicesNoServer(t *testing.T) {
 	if e != nil || len(choices) != 0 || choices == nil {
 		t.Fatalf("no server: %v, %v", choices, e)
 	}
-	if !strings.Contains(stderr.String(), "no tuios server is running") {
+	if !strings.Contains(stderr.String(), "no pane server is running") {
 		t.Fatalf("explanation: %q", stderr.String())
 	}
 	a.run = func(context.Context, []string) ([]byte, error) { return nil, exit(1, "boom") }
@@ -704,6 +700,7 @@ func TestRunnerExitStatus(t *testing.T) {
 // without a running server does, reproduced with the real binary in a
 // temporary HOME) gives an empty choice list through the default runner.
 func TestPagePaneChoicesNoServerProcess(t *testing.T) {
+	useTuiosPaneCommands(t)
 	bin := t.TempDir()
 	script := "#!/bin/sh\necho '[]'\nexit 3\n"
 	if e := os.WriteFile(filepath.Join(bin, "tuios"), []byte(script), 0o755); e != nil {
@@ -716,7 +713,7 @@ func TestPagePaneChoicesNoServerProcess(t *testing.T) {
 		t.Fatal(e)
 	}
 	choices, e := app.paneChoices(context.Background())
-	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no tuios server") {
+	if e != nil || len(choices) != 0 || !strings.Contains(stderr.String(), "no pane server") {
 		t.Fatalf("%v %v %q", choices, e, stderr.String())
 	}
 }

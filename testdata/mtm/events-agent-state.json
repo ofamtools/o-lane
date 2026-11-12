@@ -1,0 +1,33 @@
+{
+  "boot_id": "0bb6425cc36241c5",
+  "events": [
+    {
+      "seq": 10,
+      "type": "agent-state",
+      "source": "daemon",
+      "session": "mtm-only",
+      "window": "24073e50-b8b4-4916-99fa-f4c0b4526b07",
+      "boot_id": "0bb6425cc36241c5",
+      "at": 1794146384207,
+      "data": {
+        "pty_id": "874bd8d7-ffb5-4001-8d41-923ceb2afd75",
+        "state": "working"
+      }
+    },
+    {
+      "seq": 11,
+      "type": "agent-state",
+      "source": "daemon",
+      "session": "mtm-only",
+      "window": "24073e50-b8b4-4916-99fa-f4c0b4526b07",
+      "boot_id": "0bb6425cc36241c5",
+      "at": 1794146421328,
+      "data": {
+        "pty_id": "874bd8d7-ffb5-4001-8d41-923ceb2afd75",
+        "state": "unknown"
+      }
+    }
+  ],
+  "last_seq": 11,
+  "untrusted": true
+}

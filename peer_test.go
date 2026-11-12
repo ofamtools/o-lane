@@ -48,7 +48,7 @@ func TestLaneDocRows(t *testing.T) {
 func TestLaneDocRowsSkipMovedAndInactivePanes(t *testing.T) {
 	a := pageFixture(t)
 	seedPage(t, a, json.RawMessage(`{"lanes":[{"name":"Implementation"},{"name":"Other"}],"associations":[{"lane":"Implementation","pane":{"session":"fixture-session","window":"idle","role":"reviewer"}},{"lane":"Implementation","pane":{"session":"fixture-session","window":"working","role":"implementer"}}],"live_windows":[{"window_id":"idle","agent_state":"idle"},{"window_id":"working","agent_state":"working"}]}`))
-	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestLaneDocRowsSkipMovedAndInactivePanes(t *testing.T) {
 	if _, err := a.store.Associate("Other", Pane{Session: "fixture-session", Window: "working", Role: "implementer"}, false); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run)
+	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}

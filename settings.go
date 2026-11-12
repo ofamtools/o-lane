@@ -70,7 +70,7 @@ func appSettings() []ochazuke.Setting {
 		{Name: "lanes.plans-dir", Type: ochazuke.SettingString, Default: "", Description: "Optional plan directory; unset by default"},
 		{Name: "lanes.export.path", Type: ochazuke.SettingString, Default: "", Description: "Optional export destination; unset disables export"},
 		{Name: "lanes.export.columns", Type: ochazuke.SettingList, Default: []string{"wording", "estimate", "started", "finished", "result"}, Description: "Export columns"},
-		{Name: "lanes.pane-open", Type: ochazuke.SettingList, Default: []string{"tuios", "focus-window", "-s", "{session}", "{window}"}, Description: "Pane focus argv template"},
+		{Name: "lanes.pane-open", Type: ochazuke.SettingList, Default: []string{"mtm", "pane", "switch", "--session", "{session}", "--window", "{window}"}, Description: "Pane focus argv template ({session}, {window}, {host}); the default is mtm's pane.switch"},
 		{Name: "lanes.live-statuses", Type: ochazuke.SettingString, Default: defaultLiveStatuses, Validate: func(v any) error { _, e := parseLiveStatuses(fmt.Sprint(v)); return e }, Description: "JSON pane status to {name, tone, glyph} map, with working:true for active statuses; legacy string labels accepted"},
 		{Name: "lanes.live-precedence", Type: ochazuke.SettingList, Default: []string{"needs input", "errored", "working", "done", "idle", "closed", "missing"}, Description: "Live status aggregation priority"},
 		{Name: "lanes.live-roles", Type: ochazuke.SettingList, Default: []string{}, Description: "Roles counted in the aggregate; empty includes all; pane details always include every role"},
@@ -108,5 +108,5 @@ func appSettings() []ochazuke.Setting {
 	} {
 		rows = append(rows, ochazuke.Setting{Name: row.name, Type: ochazuke.SettingBoolean, Default: row.value, Description: row.desc})
 	}
-	return rows
+	return append(rows, paneCommandSettings()...)
 }

@@ -4,6 +4,13 @@
 
 - Added: the lane's `parent` prop is a reference to a lane and its `task` prop a reference to the host's `task` (`hostNoun`), so ochazuke's relation graph follows them (a mounted mtm reads `lane.task` as a reference to mtm's task; a key that names nothing stays as written). `project`, `repo`, `branch` and `worktree` stay plain strings: they are stored as names or paths, not as the target noun's key. Requires ochazuke v0.114.0 (`hostNoun`); the family word list copy is refreshed.
 - Added: setting `history.keep` (default 200, `0` keeps everything) bounds the undo history (`.history/`): the write that adds an entry removes all but the newest N (names only, never entry contents; oldest first, so an interrupted pass resumes), numbering never resets, and undo past the retained range reports `nothing more to undo: older changes were removed by history.keep`. Daily backups already pruned to `backup.keep` (test `TestStoreBackups`); they now share one retention function with history.
+- Added: a lane's `project` is stored as the id of the host's project (mtm's key) when its name, id or `mtm:<id>` matches exactly one project, and is typed as a reference to the host's `project` (`hostNoun`), so lanes hang under the project in the relation graph. The name is kept in the new `project_label` field and is what every list, filter, grouping and detail shows (the host's name for the id, else the kept name, else the stored value). Typing a name keeps working everywhere (`--project`, `project=`, define, plan define, MCP, associate); a name matching nothing or several projects is stored as typed. JSON: `project` is the id, `effective_project` still the name, new `effective_project_id` and `project_label`; page rows keep `project` as the name with `project_id` beside it. With no host projects (`lanes.project-source` none or no mtm) nothing is rewritten.
+- Added: `project resolve [--dry-run]` (owner only) rewrites the stored references that name exactly one host project as that project's id, keeping the name in `project_label`; unmatched and ambiguous names and lanes without a project stay byte for byte; history entries are not read. A real run first copies `roots/` to `<data>.bak-<date>-project-ids` (and writes nothing if that fails) and is idempotent.
+
+## v0.5.0
+
+- Changed: requires ochazuke v0.110.1 (esc only leaves insert in modals and `q` closes them; label-first pickers).
+- Changed: the pane variables are read as `MTM_X` first, then `TUIOS_X` (mtm sets both for one release): `ENV`, `SESSION`, `PANE_ID`, `HARNESS`, `AGENT_NAME`, through one `paneEnv` helper.
 
 ## v0.3.1 (2026-11-08)
 
