@@ -323,7 +323,8 @@ func (s *Store) commit(before, after []Lane, action string) error {
 	if e = s.write(after, map[string]json.RawMessage{fmt.Sprintf(".history/%020d.json", next): b}); e != nil {
 		return e
 	}
-	return s.retain(filepath.Join(s.Dir, ".history"), "*.json", s.HistoryKeep)
+	s.retain(filepath.Join(s.Dir, ".history"), "*.json", s.HistoryKeep)
+	return nil
 }
 func (s *Store) change(action string, fn func(*[]Lane) error) error {
 	if e := s.permit(action); e != nil {

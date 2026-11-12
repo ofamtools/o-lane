@@ -343,3 +343,22 @@ func TestUndoPastRetainedHistory(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+func TestHistoryPruneFailureKeepsChange(t *testing.T) {
+	s := testStore(t)
+	s.HistoryKeep = 1
+	var warned []string
+	s.Warn = func(m string) { warned = append(warned, m) }
+	s.Remove = func(p string) error {
+		if strings.Contains(p, ".history") {
+			return errors.New("denied")
+		}
+		return os.Remove(p)
+	}
+	q := mustAdd(t, s, Spec{Name: "p"})
+	if _, e := s.Annotate(q.ID, "kept"); e != nil {
+		t.Fatal("prune failure failed the write:", e)
+	}
+	if got := mustResolve(t, s, q.ID); len(got.History) == 0 || len(warned) == 0 {
+		t.Fatal(got.History, warned)
+	}
+}
