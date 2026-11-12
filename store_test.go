@@ -281,3 +281,65 @@ func domainRows(rows []Lane) []Lane {
 	}
 	return out
 }
+func historyNames(t *testing.T, s *Store) []string {
+	t.Helper()
+	files, e := filepath.Glob(filepath.Join(s.Dir, ".history", "*.json"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	return files
+}
+func TestHistoryKeep(t *testing.T) {
+	for _, keep := range []int{0, 3} {
+		s := testStore(t)
+		s.HistoryKeep = keep
+		var removed []string
+		s.Remove = func(p string) error {
+			if strings.Contains(p, ".history") {
+				removed = append(removed, p)
+			}
+			return os.Remove(p)
+		}
+		q := mustAdd(t, s, Spec{Name: "h"})
+		for i := 0; i < 5; i++ {
+			if _, e := s.Annotate(q.ID, fmt.Sprint("n", i)); e != nil {
+				t.Fatal(e)
+			}
+		}
+		files := historyNames(t, s)
+		if keep == 0 && len(files) != 6 {
+			t.Fatal("keep 0 must retain all", files)
+		}
+		if keep == 3 {
+			if len(files) != 3 || !strings.HasSuffix(files[0], "04.json") || !strings.HasSuffix(files[2], "06.json") {
+				t.Fatal("keep 3 must retain the newest three", files)
+			}
+			// numbering never resets after pruning
+			if _, e := s.Annotate(q.ID, "next"); e != nil {
+				t.Fatal(e)
+			}
+			if files = historyNames(t, s); !strings.HasSuffix(files[2], "07.json") || len(removed) != 4 {
+				t.Fatal(files, removed)
+			}
+		}
+	}
+}
+func TestUndoPastRetainedHistory(t *testing.T) {
+	s := testStore(t)
+	s.HistoryKeep = 2
+	q := mustAdd(t, s, Spec{Name: "u"})
+	for i := 0; i < 3; i++ {
+		if _, e := s.Annotate(q.ID, fmt.Sprint("n", i)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if e := s.Undo(); e != nil {
+			t.Fatal(e)
+		}
+	}
+	e := s.Undo()
+	if e == nil || !strings.Contains(e.Error(), "history.keep (2)") {
+		t.Fatal(e)
+	}
+}

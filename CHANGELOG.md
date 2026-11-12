@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added: setting `history.keep` (default 200, `0` keeps everything) bounds the undo history (`.history/`): the write that adds an entry removes all but the newest N (names only, never entry contents; oldest first, so an interrupted pass resumes), numbering never resets, and undo past the retained range reports `nothing more to undo: older changes were removed by history.keep`. Daily backups already pruned to `backup.keep` (test `TestStoreBackups`); they now share one retention function with history.
+
 ## v0.3.1 (2026-11-08)
 
 - Changed: the Lanes page draws a whole row in its status tone (every cell, as per-cell tones so the mounted mtm page draws them too), not only the status cell. Planned (no tone) rows stay default, archived rows keep their dim tone, the cursor highlight still wins, and live, stale and name tones still layer on top. Setting `lanes.status-tone-scope` = `row` (default) or `cell` (the old status-cell-only look); `lanes.status-tones` false still turns colour off.

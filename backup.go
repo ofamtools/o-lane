@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -78,17 +80,41 @@ func (s *Store) backup(to string, daily bool) (string, error) {
 	if e = syncDir(to); e != nil {
 		return "", e
 	}
-	if daily && s.BackupKeep > 0 {
-		files, e := filepath.Glob(filepath.Join(to, "????-??-??.tar.gz"))
-		if e != nil {
+	if daily {
+		if e = s.retain(to, "????-??-??.tar.gz", s.BackupKeep); e != nil {
 			return "", e
-		}
-		for len(files) > s.BackupKeep {
-			if e = s.remove(files[0]); e != nil {
-				return "", e
-			}
-			files = files[1:]
 		}
 	}
 	return path, nil
+}
+
+// retain keeps the newest keep files matching pattern in dir (names sort
+// oldest first) and removes the rest through the injectable remove function.
+// It lists names only and never reads contents; keep 0 keeps everything.
+// Each removal stands alone, so an interrupted pass resumes on the next call.
+func (s *Store) retain(dir, pattern string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	files, e := filepath.Glob(filepath.Join(dir, pattern))
+	if e != nil {
+		return e
+	}
+	for len(files) > keep {
+		if e = s.remove(files[0]); e != nil && !errors.Is(e, os.ErrNotExist) {
+			return e
+		}
+		files = files[1:]
+	}
+	return nil
+}
+
+// nothingToUndo says plainly when retention removed the older history.
+func nothingToUndo(files []string, keep int) error {
+	if len(files) > 0 {
+		if n, e := strconv.Atoi(strings.TrimSuffix(filepath.Base(files[0]), ".json")); e == nil && n > 1 {
+			return fmt.Errorf("nothing more to undo: older changes were removed by history.keep (%d)", keep)
+		}
+	}
+	return errors.New("nothing to undo")
 }
