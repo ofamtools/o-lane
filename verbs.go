@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -115,8 +116,9 @@ func (a *App) treeViews(k *call, rows []Lane, statuses []string) []View {
 	out := []View{}
 	kept := statusKept(rows, statuses)
 	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
+	match := s.projectMatcher(k.project)
 	inProject := func(q Lane) bool {
-		return (k.project == "" || subtreeProject(rows, q, k.project)) && (kept == nil || kept[q.ID]) && !hidden[q.ID]
+		return (k.project == "" || subtreeProject(rows, q, match)) && (kept == nil || kept[q.ID]) && !hidden[q.ID]
 	}
 	var walk func(string, bool)
 	walk = func(parent string, hide bool) {
@@ -152,9 +154,10 @@ func (a *App) flatViews(k *call, rows []Lane, statuses []string) ([]View, error)
 		parent = q.ID
 	}
 	out := []View{}
+	match := s.projectMatcher(k.project)
 	for _, q := range rows {
 		v := s.view(q, rows)
-		if (parent == "" || q.Parent == parent) && (k.project == "" || projectMatches(v.EffectiveProject, k.project)) && inStatuses(statuses, q) && !hidden[q.ID] {
+		if (parent == "" || q.Parent == parent) && (k.project == "" || v.EffectiveProjectID != "" && match(v.EffectiveProjectID, v.EffectiveProjectLabel)) && inStatuses(statuses, q) && !hidden[q.ID] {
 			out = append(out, v)
 		}
 	}
@@ -425,8 +428,9 @@ func (a *App) runProjectLanes(k *call) ochazuke.Result {
 	}
 	out := []View{}
 	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
+	match := s.projectMatcher(k.project)
 	for _, q := range rows {
-		if v := s.view(q, rows); projectMatches(v.EffectiveProject, k.project) && inStatuses(statuses, q) && !hidden[q.ID] {
+		if v := s.view(q, rows); v.EffectiveProjectID != "" && match(v.EffectiveProjectID, v.EffectiveProjectLabel) && inStatuses(statuses, q) && !hidden[q.ID] {
 			out = append(out, v)
 		}
 	}
@@ -490,4 +494,21 @@ func (a *App) runLaneArchive(k *call) ochazuke.Result {
 		return done(a.store.ArchiveFinished(dry, k.str("note")))
 	}
 	return a.runLanePreset(k)
+}
+
+// runProjectResolve is the one-time migration of stored project references
+// to the host project's id (Store.ResolveProjects). With no projects from
+// lanes.project-source there is nothing to resolve against, and it says so
+// rather than reporting every reference unmatched.
+func (a *App) runProjectResolve(k *call) ochazuke.Result {
+	list, e := a.hostProjects(context.Background())
+	if e != nil {
+		return done(nil, e)
+	}
+	if len(list) == 0 {
+		return done(nil, errors.New("no projects from lanes.project-source (mtm); nothing to resolve against, nothing written"))
+	}
+	dry, _ := k.c.Args["dry-run"].(bool)
+	rep, e := a.store.ResolveProjects(list, dry)
+	return done(rep, e)
 }

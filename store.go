@@ -30,7 +30,12 @@ type Store struct {
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
 	PanesShared bool
 	Permit      func(string) error
-	Remove      func(string) error
+	// ProjectRef resolves a project reference against the host's projects and
+	// ProjectNameOf names a project by id; both nil when there is no host, and
+	// then project references are stored and shown as they are.
+	ProjectRef    func(string) projectMatch
+	ProjectNameOf func(string) string
+	Remove        func(string) error
 }
 type UndoChange struct {
 	ID      string   `json:"id"`
@@ -334,6 +339,7 @@ func (s *Store) change(action string, fn func(*[]Lane) error) error {
 		if e = fn(&rows); e != nil {
 			return e
 		}
+		s.normalizeProjects(before, rows)
 		if reflect.DeepEqual(before, rows) {
 			return nil
 		}

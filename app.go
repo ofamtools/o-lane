@@ -31,6 +31,8 @@ type App struct {
 	reader      *liveReader
 	agentsOnce  sync.Once
 	agents      *agentLog
+	projects    []hostProject
+	projectsAt  time.Time
 }
 type verbSpec struct {
 	noun, name, description string
@@ -173,6 +175,7 @@ func (a *App) configure() error {
 	a.store.BackupDaily = cfg.Bool("backup.daily")
 	a.store.BackupKeep = cfg.Int("backup.keep")
 	a.store.PanesShared = !cfg.Bool("lanes.pane-one-lane")
+	a.linkProjects()
 	return nil
 }
 func (a *App) specs() []verbSpec {
@@ -263,6 +266,7 @@ func (a *App) specs() []verbSpec {
 		}
 	}
 	rows = append(rows, verbSpec{"project", "lanes", "List lanes whose effective project matches the reference", map[string]ochazuke.Parameter{"project": projectParam("Project reference"), "status": statusParam("")}, []string{"project"}, true, "", (*App).runProjectLanes, nil, false})
+	rows = append(rows, verbSpec{"project", "resolve", "Rewrite every lane's project reference that names exactly one host project (by name, id or mtm:<id>) as that project's id, keeping the name in project_label; unmatched and ambiguous names and rows without a project stay byte for byte as they were. --dry-run writes nothing and prints the counts; a real run first copies the lane roots to <data>.bak-<date>-project-ids and is idempotent", map[string]ochazuke.Parameter{"dry-run": {Type: "boolean", Description: "Print what would change and write nothing"}}, nil, false, ochazuke.AgentNever, (*App).runProjectResolve, nil, false})
 	rows = append(rows, verbSpec{"project", "list", "List project references recorded on lanes, plus lanes.project-source projects", nil, nil, true, "", (*App).runProjectList, nil, false})
 	rows = append(rows, verbSpec{"pane", "lanes", "List lanes associated with a pane", map[string]ochazuke.Parameter{"pane": param("Window ID"), "host": param("Host"), "session": param("Session")}, []string{"pane"}, true, "", (*App).runPaneLanes, nil, false})
 	agentRef := map[string]ochazuke.Parameter{"agent-id": required("Harness sub-agent ID"), "harness": param("Harness; empty matches any")}

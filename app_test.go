@@ -78,7 +78,7 @@ func TestCatalogTypesLaneReferences(t *testing.T) {
 			got[p.Name] = [2]string{p.Noun, p.HostNoun}
 		}
 	}
-	want := map[string][2]string{"parent": {"lane", ""}, "task": {"task", "task"}, "project": {"", ""}, "repo": {"", ""}, "branch": {"", ""}, "worktree": {"", ""}}
+	want := map[string][2]string{"parent": {"lane", ""}, "task": {"task", "task"}, "project": {"project", "project"}, "repo": {"", ""}, "branch": {"", ""}, "worktree": {"", ""}}
 	for name, w := range want {
 		if got[name] != w {
 			t.Errorf("lane.%s declares noun/hostNoun %v, want %v", name, got[name], w)

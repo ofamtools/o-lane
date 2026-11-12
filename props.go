@@ -99,6 +99,10 @@ func (a *App) declareProps() {
 var refProps = map[string]ochazuke.Parameter{
 	"parent": {Noun: "lane"},
 	"task":   {Noun: "task", HostNoun: "task"},
+	// project holds the id of the host's project once resolved (migrated by
+	// project resolve; written as an id from then on), so the host's project
+	// is the target; a name that matches no project stays as typed.
+	"project": {Noun: "project", HostNoun: "project"},
 }
 
 // withRef adds a prop's reference declaration (refProps) to its parameter. A

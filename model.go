@@ -84,6 +84,10 @@ type Spec struct {
 	Plan     string   `json:"plan,omitempty"`
 	Task     string   `json:"task,omitempty"`
 	Project  string   `json:"project,omitempty"`
+	// ProjectLabel is the project's name as it was when the reference was
+	// resolved to an id: what is shown when the host is absent or the project
+	// is gone.
+	ProjectLabel string `json:"project_label,omitempty"`
 }
 type Lane struct {
 	Spec
@@ -107,9 +111,13 @@ type View struct {
 	RolledStatus    string     `json:"rolled_status"`
 	Association     string     `json:"association"`
 	// EffectiveProject is the lane's own project or the nearest ancestor's.
-	EffectiveProject   string `json:"effective_project"`
-	ProjectFrom        string `json:"project_from,omitempty"`
-	ProjectAssociation string `json:"project_association"`
+	EffectiveProject string `json:"effective_project"`
+	// EffectiveProjectID is the stored reference EffectiveProject (the name
+	// shown) came from: the host project's id once resolved.
+	EffectiveProjectID    string `json:"effective_project_id"`
+	EffectiveProjectLabel string `json:"-"`
+	ProjectFrom           string `json:"project_from,omitempty"`
+	ProjectAssociation    string `json:"project_association"`
 	// StatusDescription is the description of the recorded status from
 	// lanes.statuses; StatusReason is the note that came with the latest status
 	// change (see statusReason).
@@ -119,7 +127,8 @@ type View struct {
 
 func (s *Store) view(q Lane, rows []Lane) View {
 	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledStatus: q.Status, Association: "unassociated", ProjectAssociation: "unassociated"}
-	v.EffectiveProject, v.ProjectFrom = effectiveProject(rows, q)
+	v.EffectiveProjectID, v.ProjectFrom, v.EffectiveProjectLabel = effectiveProjectLabel(rows, q)
+	v.EffectiveProject = s.projectDisplay(v.EffectiveProjectID, v.EffectiveProjectLabel)
 	v.StatusDescription = s.statuses()[q.Status].Description
 	v.StatusReason = statusReason(q.History)
 	switch {
