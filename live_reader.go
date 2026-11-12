@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,11 +57,66 @@ type liveEvent struct {
 	Host    string `json:"host"`
 	Session string `json:"session"`
 	Window  string `json:"window"`
-	Status  string `json:"state"` // tuios names this field state
+	Status  string `json:"state"` // the stream names this field state
+	// Data holds the state of an event the event command returns as a
+	// document row (mtm: data.state); Status is the top-level form.
+	Data struct {
+		State string `json:"state"`
+	} `json:"data"`
+}
+
+// eventDoc is one document of the event command: its rows, with the cursor to
+// resume after. A line without rows is a single event (a stream).
+type eventDoc struct {
+	Events  []liveEvent `json:"events"`
+	LastSeq uint64      `json:"last_seq"`
+	BootID  string      `json:"boot_id"`
+}
+
+// decodeEvents turns one output line of the event command into events. A
+// document (an object with an events array) becomes its rows, each stamped
+// with the document's boot id, and, when sawBoot is false, a leading
+// "subscribed" event whose seq is the document's cursor: the same ack a stream
+// opens with. A single event decodes as itself. polled reports a document.
+func decodeEvents(line []byte, sawBoot bool) (events []liveEvent, polled bool, err error) {
+	var probe map[string]json.RawMessage
+	if err = json.Unmarshal(line, &probe); err != nil {
+		return nil, false, err
+	}
+	if _, ok := probe["events"]; !ok {
+		var event liveEvent
+		if err = json.Unmarshal(line, &event); err != nil {
+			return nil, false, err
+		}
+		event.normalize()
+		return []liveEvent{event}, false, nil
+	}
+	var doc eventDoc
+	if err = json.Unmarshal(line, &doc); err != nil {
+		return nil, true, err
+	}
+	if !sawBoot {
+		events = append(events, liveEvent{Type: "subscribed", Seq: doc.LastSeq, BootID: doc.BootID})
+	}
+	for _, event := range doc.Events {
+		if event.BootID == "" {
+			event.BootID = doc.BootID
+		}
+		event.normalize()
+		events = append(events, event)
+	}
+	return events, true, nil
+}
+
+func (e *liveEvent) normalize() {
+	if e.Status == "" {
+		e.Status = e.Data.State
+	}
 }
 
 type liveReader struct {
 	run       commandRunner
+	cmds      paneCommands
 	mu        sync.Mutex
 	panes     []Pane
 	snapshots liveSnapshots
@@ -68,8 +124,8 @@ type liveReader struct {
 	changed   chan struct{}
 }
 
-func newLiveReader(run commandRunner, panes []Pane, snapshots liveSnapshots) *liveReader {
-	return &liveReader{run: run, panes: append([]Pane(nil), panes...), snapshots: snapshots, wake: make(chan struct{}, 1), changed: make(chan struct{}, 1)}
+func newLiveReader(run commandRunner, cmds paneCommands, panes []Pane, snapshots liveSnapshots) *liveReader {
+	return &liveReader{run: run, cmds: cmds, panes: append([]Pane(nil), panes...), snapshots: snapshots, wake: make(chan struct{}, 1), changed: make(chan struct{}, 1)}
 }
 func (r *liveReader) notify() {
 	select {
@@ -118,7 +174,7 @@ func (r *liveReader) refresh(ctx context.Context) {
 	r.mu.Lock()
 	panes := append([]Pane(nil), r.panes...)
 	r.mu.Unlock()
-	snapshots := snapshotScopes(ctx, panes, r.run)
+	snapshots := snapshotScopes(ctx, panes, r.run, r.cmds)
 	r.mu.Lock()
 	r.snapshots = snapshots
 	r.mu.Unlock()
@@ -168,41 +224,58 @@ func (r *liveReader) apply(event liveEvent) bool {
 	return false
 }
 
+// eventLineHandler decodes each output line of the events command and sends
+// its rows on events; a document line marks sawDoc and that the boot id is known.
+func eventLineHandler(ctx context.Context, events chan<- liveEvent, sawBoot *bool, sawDoc *atomic.Bool) func([]byte) error {
+	return func(line []byte) error {
+		rows, doc, err := decodeEvents(line, *sawBoot)
+		if err != nil {
+			return fmt.Errorf("pane events: %w", err)
+		}
+		if doc {
+			sawDoc.Store(true)
+			*sawBoot = true
+		}
+		for _, event := range rows {
+			select {
+			case events <- event:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+}
+
 // One reader owns one subscription. Cache replacement and notifications are
 // bounded; only the UI loop touches settings or framework objects. Seq numbers
 // may jump because the stream is filtered: only an explicit gap means data loss.
 func (r *liveReader) Run(ctx context.Context) {
 	seq := uint64(0)
 	boot := ""
+	polled := false
 	backoff := 100 * time.Millisecond
 	for ctx.Err() == nil {
 		started := time.Now()
 		streamCtx, cancel := context.WithCancel(ctx)
 		events := make(chan liveEvent, 64)
 		ended := make(chan error, 1)
-		argv := []string{"tuios", "subscribe", "--types", "agent-state,window-closed", "--hosts"}
+		argv := append([]string{}, r.cmds.Events...)
 		if boot != "" {
-			argv = append(argv, "--after-seq", strconv.FormatUint(seq, 10), "--boot-id", boot)
+			argv = append(argv, expand(r.cmds.Resume, "{after-seq}", strconv.FormatUint(seq, 10), "{boot-id}", boot)...)
 		}
+		sawBoot := boot != ""
+		var sawDoc atomic.Bool
 		go func() {
-			ended <- streamCommand(streamCtx, r.run, argv, func(line []byte) error {
-				var event liveEvent
-				if err := json.Unmarshal(line, &event); err != nil {
-					return fmt.Errorf("tuios subscribe: %w", err)
-				}
-				select {
-				case events <- event:
-					return nil
-				case <-streamCtx.Done():
-					return streamCtx.Err()
-				}
-			})
+			ended <- streamCommand(streamCtx, r.run, argv, eventLineHandler(streamCtx, events, &sawBoot, &sawDoc))
 			close(events)
 		}()
 		// The ack's seq is a replay ceiling, not a delivered-event cursor. After a
 		// snapshot, ignore replay below that ceiling so old events cannot regress it.
 		ceiling := uint64(0)
-		ready := false
+		// A document-style command is re-run from a cursor and sends no ack
+		// then: the reader stays subscribed across the runs.
+		ready := polled && boot != ""
 		for events != nil && ctx.Err() == nil {
 			select {
 			case <-ctx.Done():
@@ -244,10 +317,16 @@ func (r *liveReader) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		if err == nil && sawDoc.Load() {
+			// One document per run is the normal end of a polled command.
+			polled = true
+			backoff = 100 * time.Millisecond
+			continue
+		}
 		if err == nil {
 			err = io.EOF
 		}
-		r.unavailable(fmt.Errorf("tuios stream disconnected: %w", err))
+		r.unavailable(fmt.Errorf("pane event stream disconnected: %w", err))
 		if time.Since(started) >= 5*time.Second {
 			backoff = 100 * time.Millisecond
 		}

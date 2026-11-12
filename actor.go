@@ -29,7 +29,10 @@ func firstEnv(env func(string) string, keys []string) string {
 }
 
 func detectHarness(env func(string) string) (string, string) {
-	explicit := firstEnv(env, []string{"TUIOS_HARNESS", "AGENT_HARNESS", "OCHAZUKE_HARNESS"})
+	explicit := paneEnv(env, "HARNESS")
+	if explicit == "" {
+		explicit = firstEnv(env, []string{"AGENT_HARNESS", "OCHAZUKE_HARNESS"})
+	}
 	for _, row := range harnessDetectors {
 		// An explicit harness scopes the run ID; a nested harness may inherit
 		// another harness's environment without owning that other run.
@@ -55,7 +58,7 @@ func detectHarness(env func(string) string) (string, string) {
 // explicit override may fill identity fields, never promote a detected agent.
 func cliActor(env func(string) string) (Actor, error) {
 	harness, run := detectHarness(env)
-	a := Actor{Kind: "owner", Name: env("TUIOS_AGENT_NAME"), Harness: harness, Pane: env("TUIOS_PANE_ID"), Session: env("TUIOS_SESSION"), Model: firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"})}
+	a := Actor{Kind: "owner", Name: paneEnv(env, "AGENT_NAME"), Harness: harness, Pane: paneEnv(env, "PANE_ID"), Session: paneEnv(env, "SESSION"), Model: firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"})}
 	detected := a.Harness != ""
 	if detected {
 		a.Kind = "agent"
