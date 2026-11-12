@@ -234,7 +234,10 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	if o.groupProjects {
 		// Roots group by effective project (stable, so newest first within a
 		// group); unassociated roots come last. Children keep tree order.
-		group := func(q Lane) string { p, _ := effectiveProject(lanes, q); return strings.ToLower(p) }
+		group := func(q Lane) string {
+			p, from := effectiveProject(lanes, q)
+			return strings.ToLower(s.projectDisplay(p, labelOf(lanes, from)))
+		}
 		// Children all sort after roots; stability keeps sibling order.
 		rank := func(q Lane) (int, string) {
 			if q.Parent != "" {
@@ -264,13 +267,14 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	// then do not flag them, so the list's own archive hiding leaves them be.
 	asked := slices.ContainsFunc(o.statuses, func(name string) bool { return s.statuses()[name].Archive })
 	rolls := s.rollups(lanes)
+	projectMatch := s.projectMatcher(o.project)
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
 			if q.Parent != parent {
 				continue
 			}
-			if o.project != "" && !subtreeProject(lanes, q, o.project) {
+			if o.project != "" && !subtreeProject(lanes, q, projectMatch) {
 				continue
 			}
 			if (kept != nil && !kept[q.ID]) || hidden[q.ID] {
@@ -421,6 +425,9 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			data["stale"], data["stale_reason"] = stale, staleReason
 			data["children_done"], data["children_total"] = rollDone, rollTotal
 			laneFilterValues(data, q, s.statuses()[q.Status].Archive && !asked)
+			// A page row shows and filters a project by its name; the stored id
+			// stays in project_id.
+			s.rowProject(data, q)
 			if about := statusAbout(q.Status, v.StatusDescription, v.StatusReason); o.statusAbout && about != "" {
 				data["status_about"] = about
 			}

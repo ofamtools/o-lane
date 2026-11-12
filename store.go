@@ -26,11 +26,17 @@ type Store struct {
 	Warn          func(string)
 	BackupDaily   bool
 	BackupKeep    int
+	HistoryKeep   int // undo entries retained; 0 keeps all
 	// PanesShared lets one pane belong to several lanes at once
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
 	PanesShared bool
 	Permit      func(string) error
-	Remove      func(string) error
+	// ProjectRef resolves a project reference against the host's projects and
+	// ProjectNameOf names a project by id; both nil when there is no host, and
+	// then project references are stored and shown as they are.
+	ProjectRef    func(string) projectMatch
+	ProjectNameOf func(string) string
+	Remove        func(string) error
 }
 type UndoChange struct {
 	ID      string   `json:"id"`
@@ -319,7 +325,11 @@ func (s *Store) commit(before, after []Lane, action string) error {
 	if e != nil {
 		return e
 	}
-	return s.write(after, map[string]json.RawMessage{fmt.Sprintf(".history/%020d.json", next): b})
+	if e = s.write(after, map[string]json.RawMessage{fmt.Sprintf(".history/%020d.json", next): b}); e != nil {
+		return e
+	}
+	s.retain(filepath.Join(s.Dir, ".history"), "*.json", s.HistoryKeep)
+	return nil
 }
 func (s *Store) change(action string, fn func(*[]Lane) error) error {
 	if e := s.permit(action); e != nil {
@@ -334,6 +344,7 @@ func (s *Store) change(action string, fn func(*[]Lane) error) error {
 		if e = fn(&rows); e != nil {
 			return e
 		}
+		s.normalizeProjects(before, rows)
 		if reflect.DeepEqual(before, rows) {
 			return nil
 		}
@@ -407,7 +418,7 @@ func (s *Store) Undo() error {
 			}
 			return s.write(restored, map[string]json.RawMessage{".history/" + filepath.Base(files[i]): b})
 		}
-		return errors.New("nothing to undo")
+		return nothingToUndo(files, s.HistoryKeep)
 	})
 }
 

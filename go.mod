@@ -8,8 +8,8 @@ require (
 	github.com/yuin/goldmark v1.7.8
 	golang.org/x/sys v0.47.0
 	ofam.dev/monogatari v0.8.0
-	ofam.dev/ochazuke v0.105.0
-	ofam.dev/oden v0.3.0
+	ofam.dev/ochazuke v0.124.1
+	ofam.dev/oden v0.5.1
 )
 
 require (

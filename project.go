@@ -66,17 +66,37 @@ func effectiveProject(rows []Lane, q Lane) (string, string) {
 	return "", ""
 }
 
+// effectiveProjectLabel is effectiveProject with the name kept on the lane
+// that recorded the project.
+func effectiveProjectLabel(rows []Lane, q Lane) (project, from, label string) {
+	project, from = effectiveProject(rows, q)
+	if from == q.ID {
+		return project, from, q.ProjectLabel
+	}
+	return project, from, labelOf(rows, from)
+}
+
 // subtreeProject reports whether q or any visible descendant belongs to the
 // queried project, so filtered trees keep the ancestors of matching lanes.
-func subtreeProject(rows []Lane, q Lane, query string) bool {
+func subtreeProject(rows []Lane, q Lane, match func(stored, label string) bool) bool {
 	for _, c := range rows {
 		if c.ID == q.ID || descendant(rows, c.ID, q.ID) {
-			if p, _ := effectiveProject(rows, c); projectMatches(p, query) {
+			if p, from := effectiveProject(rows, c); p != "" && match(p, labelOf(rows, from)) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// labelOf is the project name kept on the lane with that id.
+func labelOf(rows []Lane, id string) string {
+	for _, p := range rows {
+		if p.ID == id {
+			return p.ProjectLabel
+		}
+	}
+	return ""
 }
 
 func (s *Store) project(q *Lane, ref string, remove bool) error {
@@ -85,7 +105,7 @@ func (s *Store) project(q *Lane, ref string, remove bool) error {
 		if q.Project == "" {
 			return fmt.Errorf("lane %s names no project of its own; unassociate the ancestor that records it", q.ID)
 		}
-		if ref != "" && !projectMatches(q.Project, ref) {
+		if ref != "" && !s.projectMatcher(ref)(q.Project, q.ProjectLabel) {
 			return fmt.Errorf("lane %s is associated with project %q, not %q", q.ID, q.Project, ref)
 		}
 		old := q.Project
@@ -96,8 +116,8 @@ func (s *Store) project(q *Lane, ref string, remove bool) error {
 	if ref == "" {
 		return errors.New("project must not be empty")
 	}
-	if q.Project == ref {
-		return nil
+	if q.Project == ref || s.projectMatcher(ref)(q.Project, "") {
+		return nil // already this project (by id, name or kind:id)
 	}
 	old := q.Project
 	q.Project = ref
@@ -130,9 +150,14 @@ func projectSourceDefault() string {
 	return "none"
 }
 
-// sourceProjects asks the configured host for its projects. Mounted calls use
-// the host's complete argv; standalone calls retain the injectable PATH runner.
-func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
+// hostProject is a project of the configured source: the id mtm keys it by
+// and the name people see and type.
+type hostProject struct{ ID, Name string }
+
+// hostProjects asks the configured source (lanes.project-source) for its
+// projects. Mounted calls use the host's complete argv; standalone calls
+// retain the injectable PATH runner. Source "none" has no projects.
+func (a *App) hostProjects(ctx context.Context) ([]hostProject, error) {
 	switch source := a.r.Settings().String("lanes.project-source"); source {
 	case "", "none":
 		return nil, nil
@@ -152,11 +177,18 @@ func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
 		if e != nil {
 			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
 		}
+		// mtm answers an array, or {"items": [...]} for a paged list.
 		var rows []struct{ ID, Name, Label string }
 		if e = json.Unmarshal(b, &rows); e != nil {
-			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
+			var page struct {
+				Items []struct{ ID, Name, Label string }
+			}
+			if e2 := json.Unmarshal(b, &page); e2 != nil {
+				return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
+			}
+			rows = page.Items
 		}
-		out := []projectRow{}
+		out := []hostProject{}
 		for _, r := range rows {
 			name := r.Name
 			if name == "" {
@@ -165,12 +197,22 @@ func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
 			if name == "" {
 				name = r.ID
 			}
-			out = append(out, projectRow{Ref: name, Name: name, Source: source})
+			out = append(out, hostProject{ID: r.ID, Name: name})
 		}
 		return out, nil
 	default:
 		return nil, fmt.Errorf("lanes.project-source: unknown source %q; use mtm or none", source)
 	}
+}
+
+// sourceProjects is the source's projects as choosable references: the name.
+func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
+	list, e := a.hostProjects(ctx)
+	out := []projectRow{}
+	for _, p := range list {
+		out = append(out, projectRow{Ref: p.Name, Name: p.Name, Source: a.r.Settings().String("lanes.project-source")})
+	}
+	return out, e
 }
 
 // projectRows merges references recorded on lanes with the source's projects.
@@ -181,8 +223,8 @@ func (a *App) projectRows(ctx context.Context) ([]projectRow, error) {
 	}
 	counts := map[string]int{}
 	for _, q := range lanes {
-		if p, _ := effectiveProject(lanes, q); p != "" {
-			counts[p]++
+		if p, from := effectiveProject(lanes, q); p != "" {
+			counts[a.store.projectDisplay(p, labelOf(lanes, from))]++
 		}
 	}
 	out := []projectRow{}
