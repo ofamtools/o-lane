@@ -341,14 +341,7 @@ func (a *App) define(args ochazuke.Arguments, warn func(string)) ochazuke.Result
 		if e := decode(args["lanes"], &fields); e != nil {
 			return done(nil, e)
 		}
-		// A key that is no spec field and no prop lane set writes is
-		// named, never dropped in silence (and never refused).
-		known := append(jsonFields(Spec{}), lifecycleProps...)
-		for i, row := range fields {
-			for _, text := range unknownKeys(row, known) {
-				warn(fmt.Sprintf("lane define: lane %d (%q): %s", i+1, specs[i].Name, text))
-			}
-		}
+		defineKeyNotices(specs, fields, warn)
 	} else {
 		columns, e := parseImportColumns(a.r.Settings().String("lanes.import-columns"))
 		if e != nil {
@@ -401,6 +394,17 @@ func (a *App) define(args ochazuke.Arguments, warn func(string)) ochazuke.Result
 	}
 	rows, e := a.store.defineFields(specs, fields)
 	return done(rows, e)
+}
+
+// defineKeyNotices names each key of a JSON definition that is no spec
+// field and no prop lane set writes: never dropped in silence, never refused.
+func defineKeyNotices(specs []Spec, fields []map[string]any, warn func(string)) {
+	known := append(jsonFields(Spec{}), lifecycleProps...)
+	for i, row := range fields {
+		for _, text := range unknownKeys(row, known) {
+			warn(fmt.Sprintf("lane define: lane %d (%q): %s", i+1, specs[i].Name, text))
+		}
+	}
 }
 
 func (a *App) planLanes(path string) ochazuke.Result {

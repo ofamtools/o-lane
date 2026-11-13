@@ -12,7 +12,6 @@ app.go	App.specs	case	"lane"	1
 app.go	App.specs	case	"pane"	1
 app.go	App.specs	case	"project"	1
 app.go	newApp	compare	"lane"	1
-changes.go	Store.defineFields	cyclo	"-"	26
 changes.go	Store.restoreStatus	compare	"status"	1
 changes.go	setSpec	compare	"depends"	1
 filter.go	laneFilterValues	compare	"depends"	1
@@ -31,12 +30,18 @@ plan.go	parsePlan	compare	"depends"	1
 plan.go	parsePlan	compare	"name"	3
 plan.go	parsePlan	cyclo	"-"	33
 props.go	App.declareProps	compare	"depends"	1
-props.go	App.patchLane	compare	"archived"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
-props.go	App.patchLane	compare	"reason"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
-props.go	App.patchLane	compare	"status"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
+props.go	Store.patch	compare	"archived"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
+props.go	Store.patch	compare	"reason"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
+props.go	Store.patch	compare	"status"	1	the props that record a change with a note (status, archived) and the reason that is its note; not a branch on a noun or verb
 props.go	App.refreshOpenFilter	compare	"open"	1
 props.go	App.refreshStatusEnum	compare	"status"	1	the status prop and the status filter parameters take the configured lanes.statuses names as choices
 props.go	archiveFlag	case	"on"	1
 store.go	changedLanes	compare	"undo"	1
 tui.go	mountPage	compare	"lane"	1
 settings.go	var toneScopes	table	"row"	1	the accepted values of lanes.status-tone-scope, as data the page and the validator both read; a value is one table row
+app.go	var tableVerbs	table	"lane.list"	1	data: the verbs a person reads as a table (Operation.HumanFormat), one row each
+app.go	var tableVerbs	table	"lane.tree"	1	data: the verbs a person reads as a table (Operation.HumanFormat), one row each
+app.go	var tableVerbs	table	"lane.history"	1	data: the verbs a person reads as a table (Operation.HumanFormat), one row each
+app.go	var tableVerbs	table	"plan.lanes"	1	data: the verbs a person reads as a table (Operation.HumanFormat), one row each
+changes.go	Store.openBeforeClosed	compare	"status"	1	history entry kind written by the store, as in restoreStatus
+model.go	statusReason	compare	"reason"	1	history entry kind a reason written alone records (reasonProp)

@@ -193,46 +193,23 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 						index = i
 					}
 				}
+				var q *Lane
 				if index < 0 {
 					if _, e := s.add(rows, spec); e != nil {
 						return e
 					}
-					q := &(*rows)[len(*rows)-1]
-					if e := s.patch(q, lifecycleFields(supplied, item.Index)); e != nil {
-						return e
-					}
-					out = append(out, *q)
-					defined[item.Index] = q.ID
+					q = &(*rows)[len(*rows)-1]
 				} else {
-					q := &(*rows)[index]
-					before := q.Spec
-					b, e := json.Marshal(spec)
-					if e != nil {
+					q = &(*rows)[index]
+					if e := s.redefine(q, spec, supplied, item.Index); e != nil {
 						return e
 					}
-					var fields map[string]any
-					if e = json.Unmarshal(b, &fields); e != nil {
-						return e
-					}
-					if supplied != nil {
-						fields = supplied[item.Index]
-					}
-					for _, prop := range editable {
-						if v, ok := fields[prop]; ok {
-							if e = setSpec(&q.Spec, prop, v); e != nil {
-								return e
-							}
-						}
-					}
-					if !reflect.DeepEqual(before, q.Spec) {
-						s.entry(q, "edit", "", "", "define", nil, nil)
-					}
-					if e = s.patch(q, lifecycleFields(supplied, item.Index)); e != nil {
-						return e
-					}
-					out = append(out, *q)
-					defined[item.Index] = q.ID
 				}
+				if e := s.patch(q, lifecycleFields(supplied, item.Index)); e != nil {
+					return e
+				}
+				out = append(out, *q)
+				defined[item.Index] = q.ID
 				progress = true
 			}
 			if !progress {
@@ -243,6 +220,34 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 		return nil
 	})
 	return
+}
+
+// redefine writes a definition's editable fields (the supplied ones, with
+// their explicit empty values) over an existing lane.
+func (s *Store) redefine(q *Lane, spec Spec, supplied []map[string]any, i int) error {
+	before := q.Spec
+	b, e := json.Marshal(spec)
+	if e != nil {
+		return e
+	}
+	var fields map[string]any
+	if e = json.Unmarshal(b, &fields); e != nil {
+		return e
+	}
+	if supplied != nil {
+		fields = supplied[i]
+	}
+	for _, prop := range editable {
+		if v, ok := fields[prop]; ok {
+			if e = setSpec(&q.Spec, prop, v); e != nil {
+				return e
+			}
+		}
+	}
+	if !reflect.DeepEqual(before, q.Spec) {
+		s.entry(q, "edit", "", "", "define", nil, nil)
+	}
+	return nil
 }
 
 // lifecycleFields are the lifecycle props (status, archived, reason) a
