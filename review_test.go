@@ -205,7 +205,12 @@ func TestCLIFixtureClearsIdentity(t *testing.T) {
 		t.Setenv(k, "inherited")
 	}
 	dir := fixture(t)
-	if !strings.HasPrefix(filepath.Clean(dir), filepath.Clean(os.TempDir())+string(os.PathSeparator)) {
+	// t.TempDir honours GOTMPDIR (the gate sets it), else TMPDIR.
+	tmp := os.Getenv("GOTMPDIR")
+	if tmp == "" {
+		tmp = os.TempDir()
+	}
+	if !strings.HasPrefix(filepath.Clean(dir), filepath.Clean(tmp)+string(os.PathSeparator)) {
 		t.Fatal(dir)
 	}
 	for _, k := range []string{"MTM_SESSION", "MTM_PANE_ID", "MTM_HARNESS", "MTM_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
