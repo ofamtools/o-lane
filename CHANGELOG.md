@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.9.0 (2026-11-13)
 
 - Changed: live status reads one session per `mtm session list-panes` call, now run concurrently (4 at a time) instead of one after another, and once per host/session per read. A list over 6 sessions waits for about two process starts, not six. A failed or slow session still leaves only its own panes `unknown` (3 s limit each). A mounted o-lane still execs the host command, as `mtm` offers no in-process call; `mtm pane list` is not used because it carries no state time.
 
