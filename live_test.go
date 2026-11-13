@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -165,14 +166,18 @@ func TestLiveSnapshotsAndCLI(t *testing.T) {
 	}
 	panes := []Pane{{Host: "remote", Session: "s", Window: "w1"}, {Session: "s", Window: "w1"}, {Session: "other", Window: "w1"}, {Window: "unassociated"}}
 	calls := []string{}
+	var callsMu sync.Mutex
 	snaps := snapshotScopes(context.Background(), panes, func(_ context.Context, argv []string) ([]byte, error) {
+		callsMu.Lock()
 		calls = append(calls, strings.Join(argv, " "))
+		callsMu.Unlock()
 		if strings.Contains(strings.Join(argv, " "), "remote:") {
 			return nil, errors.New("offline")
 		}
 		return []byte(`{"windows":[{"window_id":"w1","agent_state":"working"}]}`), nil
 	}, tuiosPaneCommands())
-	if len(calls) != 3 || calls[0] != "tuios list-windows --json -s remote:s" {
+	sort.Strings(calls)
+	if len(calls) != 3 || calls[1] != "tuios list-windows --json -s remote:s" {
 		t.Fatal(calls)
 	}
 	o, _ := f.a.liveOptions()
@@ -485,5 +490,46 @@ func TestLiveReaderScopeIsolation(t *testing.T) {
 	r.mu.Unlock()
 	if !r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", Status: "working"}) {
 		t.Fatal("recovering scope did not request a snapshot")
+	}
+}
+
+// One read asks each session once, and several at the same time (bounded).
+func TestSnapshotScopesConcurrentOncePerSession(t *testing.T) {
+	var panes []Pane
+	for i := 0; i < 8; i++ {
+		s := fmt.Sprintf("s%d", i)
+		panes = append(panes, Pane{Session: s, Window: "w1"}, Pane{Session: s, Window: "w2"})
+	}
+	var mu sync.Mutex
+	seen := map[string]int{}
+	active, peak := 0, 0
+	snaps := snapshotScopes(context.Background(), panes, func(_ context.Context, argv []string) ([]byte, error) {
+		mu.Lock()
+		seen[strings.Join(argv, " ")]++
+		active++
+		peak = max(peak, active)
+		mu.Unlock()
+		time.Sleep(30 * time.Millisecond)
+		mu.Lock()
+		active--
+		mu.Unlock()
+		if strings.HasSuffix(strings.Join(argv, " "), "s3") {
+			return nil, errors.New("slow")
+		}
+		return []byte(`{"windows":[{"window_id":"w1","agent_state":"working"}]}`), nil
+	}, defaultPaneCommands())
+	if len(seen) != 8 || len(snaps) != 8 {
+		t.Fatal(seen)
+	}
+	for k, n := range seen {
+		if n != 1 {
+			t.Fatal(k, n)
+		}
+	}
+	if peak < 2 || peak > snapshotConcurrency {
+		t.Fatalf("peak concurrency %d", peak)
+	}
+	if snaps[liveScope{Session: "s3"}].err == nil || snaps[liveScope{Session: "s4"}].err != nil {
+		t.Fatal("one failed session must not affect the others")
 	}
 }

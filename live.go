@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"ofam.dev/ochazuke"
@@ -238,8 +239,17 @@ func (a *App) resolvePane(p Pane) Pane {
 	return p
 }
 
+// snapshotConcurrency bounds how many session reads run at once: each read
+// starts a process, so the cost of N sessions is about N/4 starts, not N.
+const snapshotConcurrency = 4
+
+// snapshotScopes reads each distinct host/session once, concurrently (bounded),
+// so one command or page load never asks twice for the same session and never
+// waits on sessions one after another. A failed or slow read leaves that scope
+// with an error (lanes list without live status for it), never blocks the rest.
 func snapshotScopes(parent context.Context, panes []Pane, run commandRunner, cmds paneCommands) liveSnapshots {
 	out := liveSnapshots{}
+	var keys []liveScope
 	for _, p := range panes {
 		if p.Window == "" {
 			continue
@@ -248,32 +258,54 @@ func snapshotScopes(parent context.Context, panes []Pane, run commandRunner, cmd
 		if _, ok := out[key]; ok {
 			continue
 		}
-		snap := liveSnapshot{windows: map[string]string{}, statusTimes: map[string]time.Time{}}
-		if p.Session == "" {
-			snap.err = errors.New("pane session is unassociated")
-		} else {
-			session := p.Session
-			if p.Host != "" {
-				session = p.Host + ":" + session
-			}
-			ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-			b, err := run(ctx, expand(cmds.Panes, "{session}", session))
-			cancel()
-			snap.err = err
-			if err == nil {
-				windows, err := decodeTuiosList[windowStatus](b, "windows")
-				snap.err = err
-				for _, w := range windows {
-					snap.windows[w.Window] = w.Status
-					if w.StatusAt != 0 {
-						snap.statusTimes[w.Window] = time.Unix(0, w.StatusAt).UTC()
-					}
-				}
-			}
-		}
-		out[key] = snap
+		out[key] = liveSnapshot{}
+		keys = append(keys, key)
+	}
+	snaps := make([]liveSnapshot, len(keys))
+	sem := make(chan struct{}, snapshotConcurrency)
+	var wg sync.WaitGroup
+	for i, key := range keys {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			snaps[i] = readScope(parent, key, run, cmds)
+		}()
+	}
+	wg.Wait()
+	for i, key := range keys {
+		out[key] = snaps[i]
 	}
 	return out
+}
+
+func readScope(parent context.Context, key liveScope, run commandRunner, cmds paneCommands) liveSnapshot {
+	snap := liveSnapshot{windows: map[string]string{}, statusTimes: map[string]time.Time{}}
+	if key.Session == "" {
+		snap.err = errors.New("pane session is unassociated")
+		return snap
+	}
+	session := key.Session
+	if key.Host != "" {
+		session = key.Host + ":" + session
+	}
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	b, err := run(ctx, expand(cmds.Panes, "{session}", session))
+	snap.err = err
+	if err != nil {
+		return snap
+	}
+	windows, err := decodeTuiosList[windowStatus](b, "windows")
+	snap.err = err
+	for _, w := range windows {
+		snap.windows[w.Window] = w.Status
+		if w.StatusAt != 0 {
+			snap.statusTimes[w.Window] = time.Unix(0, w.StatusAt).UTC()
+		}
+	}
+	return snap
 }
 func aggregateLive(panes []Pane, o liveOptions, snapshots liveSnapshots) Live {
 	out := Live{Status: "unassociated", Panes: []LivePane{}}
