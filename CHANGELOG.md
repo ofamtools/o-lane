@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.10.0
 
 - Fixed (SC-071): `lane define` dropped `status` without a word. It now takes every lifecycle prop `lane set` takes (`status`, `reason`, `archived`, through the same patch) beside the spec fields, and names any other key in a notice with did-you-mean (`unknown key "stauts" was not saved (did you mean "status"?)`); the rest of the row is kept.
 - Changed (record first, ER-0577/ER-0580, S15): a lane whose parent names no lane is saved at the top level with the notice `unknown lane X; saved at the top level` (as `task new --parent` does), instead of refusing; an empty lane name is saved as `untitled-STAMP` with a notice; an empty note is recorded. Undo removes each.
