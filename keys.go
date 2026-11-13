@@ -31,9 +31,9 @@ func unknownKeys(row map[string]any, known []string) []string {
 }
 
 // nearest is the known word closest to w by edit distance, when it is
-// within a third of the word's length (at least one edit); "" otherwise.
+// within two edits or a third of the word's length; "" otherwise.
 func nearest(w string, known []string) string {
-	best, bestD := "", max(1, len(w)/3)+1
+	best, bestD := "", max(2, len(w)/3)+1
 	for _, k := range known {
 		if d := editDistance(strings.ToLower(w), k); d < bestD {
 			best, bestD = k, d
