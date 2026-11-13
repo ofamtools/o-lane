@@ -105,7 +105,7 @@ func (s *Store) project(q *Lane, ref string, remove bool) error {
 		if q.Project == "" {
 			return fmt.Errorf("lane %s names no project of its own; unassociate the ancestor that records it", q.ID)
 		}
-		if ref != "" && !s.projectMatcher(ref)(q.Project, q.ProjectLabel) {
+		if ref != "" && !s.projectMatcher(ref, nil)(q.Project, q.ProjectLabel) {
 			return fmt.Errorf("lane %s is associated with project %q, not %q", q.ID, q.Project, ref)
 		}
 		old := q.Project
@@ -116,7 +116,7 @@ func (s *Store) project(q *Lane, ref string, remove bool) error {
 	if ref == "" {
 		return errors.New("project must not be empty")
 	}
-	if q.Project == ref || s.projectMatcher(ref)(q.Project, "") {
+	if q.Project == ref || s.projectMatcher(ref, nil)(q.Project, "") {
 		return nil // already this project (by id, name or kind:id)
 	}
 	old := q.Project

@@ -160,11 +160,11 @@ func TestStaleParticipantOwnershipAndAgents(t *testing.T) {
 	rows := []Lane{q, {ID: "new", Panes: []Pane{newer}}}
 	o := liveOptions{on: true, mapping: mapping}
 	snap := liveSnapshots{{Session: "s"}: {windows: map[string]string{"w": "working"}}}
-	if stale, _ := staleLane(q, statuses, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); !stale {
+	if stale, _ := staleLane(q, statuses, aggregateLive(s.paneTree(rows).ownPanes(0), o, snap), true, now); !stale {
 		t.Fatal("old pane holder still counts activity")
 	}
 	s.PanesShared = true
-	if stale, _ := staleLane(q, statuses, aggregateLive(s.ownPanes(rows, q), o, snap), true, now); stale {
+	if stale, _ := staleLane(q, statuses, aggregateLive(s.paneTree(rows).ownPanes(0), o, snap), true, now); stale {
 		t.Fatal("shared pane activity ignored")
 	}
 	q.Panes = []Pane{{AgentID: "a", Harness: "custom"}}

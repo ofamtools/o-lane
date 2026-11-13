@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -94,49 +95,100 @@ func (a *App) liveOptions() (liveOptions, error) {
 // panesInSubtree lists the panes that count for q's subtree. Unless panes
 // are shared, a pane counts only for the lane holding its most recent
 // association, so data recorded before the one-lane rule reads correctly.
+// A caller that asks for many lanes builds one paneTree and reuses it.
 func (s *Store) panesInSubtree(rows []Lane, q Lane) []Pane {
-	return s.panesInSubtreeWhere(rows, q, nil)
+	return s.paneTree(rows).subtree(q, nil)
 }
 
-func (s *Store) panesInSubtreeWhere(rows []Lane, q Lane, include func(Lane) bool) []Pane {
+// paneTree is one read's parent-to-children and pane-to-lanes maps, so each
+// lane's subtree and each pane's holder cost one pass over what they touch,
+// not a walk of every lane per lane.
+type paneTree struct {
+	shared   bool
+	rows     []Lane
+	rowsByID map[string][]int // row indexes by lane id, in row order
+	children map[string][]string
+	held     []heldPane // every pane of a live lane, in row order
+	own      map[int][]Pane
+}
+
+type heldPane struct {
+	lane string
+	pane Pane
+}
+
+func (s *Store) paneTree(rows []Lane) *paneTree {
+	t := &paneTree{shared: s.PanesShared, rows: rows, rowsByID: map[string][]int{}, children: map[string][]string{}, own: map[int][]Pane{}}
+	for i, r := range rows {
+		first := len(t.rowsByID[r.ID]) == 0
+		t.rowsByID[r.ID] = append(t.rowsByID[r.ID], i)
+		if first && r.Parent != "" {
+			t.children[r.Parent] = append(t.children[r.Parent], r.ID)
+		}
+		if !r.Deleted {
+			for _, p := range r.Panes {
+				t.held = append(t.held, heldPane{r.ID, p})
+			}
+		}
+	}
+	return t
+}
+
+// subtree lists the panes of q and its descendants (rows keep their order),
+// limited to the rows include accepts.
+func (t *paneTree) subtree(q Lane, include func(Lane) bool) []Pane {
+	ids := map[string]bool{q.ID: true}
+	for queue := []string{q.ID}; len(queue) > 0; queue = queue[1:] {
+		for _, c := range t.children[queue[0]] {
+			if !ids[c] {
+				ids[c] = true
+				queue = append(queue, c)
+			}
+		}
+	}
+	idx := []int{}
+	for id := range ids {
+		idx = append(idx, t.rowsByID[id]...)
+	}
+	sort.Ints(idx)
 	panes := []Pane{}
-	for _, row := range rows {
-		if !row.Deleted && (row.ID == q.ID || descendant(rows, row.ID, q.ID)) && (include == nil || include(row)) {
-			panes = append(panes, s.ownPanes(rows, row)...)
+	for _, i := range idx {
+		if row := t.rows[i]; !row.Deleted && (include == nil || include(row)) {
+			panes = append(panes, t.ownPanes(i)...)
 		}
 	}
 	return panes
 }
 
-func (s *Store) ownPanes(rows []Lane, q Lane) []Pane {
-	panes := []Pane{}
-	for _, p := range q.Panes {
-		if s.PanesShared || paneHolder(rows, q.ID, p) == "" {
-			panes = append(panes, p)
+func (t *paneTree) ownPanes(i int) []Pane {
+	if own, ok := t.own[i]; ok {
+		return own
+	}
+	own := []Pane{}
+	for _, p := range t.rows[i].Panes {
+		if t.shared || t.holder(t.rows[i].ID, p) == "" {
+			own = append(own, p)
 		}
 	}
-	return panes
+	t.own[i] = own
+	return own
 }
 
-// paneHolder returns the lane that associated p after laneID did, or "" when
+// holder returns the lane that associated p after laneID did, or "" when
 // laneID holds p's most recent association (ties keep every holder).
-func paneHolder(rows []Lane, laneID string, p Pane) string {
+func (t *paneTree) holder(laneID string, p Pane) string {
 	if !identified(p) {
 		return ""
 	}
 	holder, since := "", p.Since
-	for _, r := range rows {
-		if r.ID == laneID || r.Deleted {
-			continue
-		}
-		for _, o := range r.Panes {
-			if paneKey(o, p) && o.Since.After(since) {
-				holder, since = r.ID, o.Since
-			}
+	for _, h := range t.held {
+		if h.lane != laneID && paneKey(h.pane, p) && h.pane.Since.After(since) {
+			holder, since = h.lane, h.pane.Since
 		}
 	}
 	return holder
 }
+
 func (a *App) associatedPanes(q Lane) ([]Pane, error) {
 	rows, err := a.store.List()
 	return a.store.panesInSubtree(rows, q), err
@@ -395,16 +447,18 @@ func (a *App) enrichLive(views []View) error {
 	if err != nil {
 		return err
 	}
+	tree := a.store.paneTree(rows)
+	statuses := a.store.statuses()
 	panes := []Pane{}
 	for _, v := range views {
-		panes = append(panes, a.store.panesInSubtree(rows, v.Lane)...)
+		panes = append(panes, tree.subtree(v.Lane, nil)...)
 	}
 	snapshots := snapshotScopes(context.Background(), panes, a.run, a.paneCommands())
 	for i := range views {
-		v := aggregateLive(a.store.panesInSubtree(rows, views[i].Lane), o, snapshots)
+		v := aggregateLive(tree.subtree(views[i].Lane, nil), o, snapshots)
 		views[i].Live = &v
-		activity := aggregateLive(a.store.stalePanes(rows, views[i].Lane), o, snapshots)
-		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, a.store.statuses(), activity, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
+		activity := aggregateLive(tree.stale(views[i].Lane, statuses), o, snapshots)
+		views[i].Stale, views[i].StaleReason = staleLane(views[i].Lane, statuses, activity, a.r.Settings().Bool("lanes.stale-flag"), a.store.now())
 	}
 	return nil
 }

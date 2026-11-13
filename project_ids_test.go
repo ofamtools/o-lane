@@ -137,9 +137,9 @@ func TestProjectStandaloneKeepsNames(t *testing.T) {
 	}
 }
 
-// A host that cannot be read (or is slow) must not hold the page: the host is
-// asked once, not once per row, and every lane is listed by the name kept on
-// it, found by name, id or mtm:<id>.
+// A read never asks the host for a stored project: every lane is listed by the
+// name kept on it, found by name, id or mtm:<id>, with the host down. Only a
+// name no stored lane matches goes to the host, once.
 func TestProjectHostFailureDoesNotHoldRows(t *testing.T) {
 	f := newCLI(t)
 	withHostProjects(f)
@@ -172,7 +172,20 @@ func TestProjectHostFailureDoesNotHoldRows(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("rows waited %v on the host", d)
 	}
-	if asked != 1 {
-		t.Fatalf("host asked %d times, want once", asked)
+	if asked != 0 {
+		t.Fatalf("reads asked the host %d times, want none", asked)
+	}
+	f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
+		if strings.Join(argv, " ") == "mtm project list" {
+			asked++
+		}
+		return nil, os.ErrNotExist
+	}
+	f.a.pmu.Lock()
+	f.a.projectsFailAt = time.Time{}
+	f.a.projectsAt = time.Time{}
+	f.a.pmu.Unlock()
+	if rows := f.call("lane", "rows", "--project", "Gamma").([]any); len(rows) != 0 || asked != 1 {
+		t.Fatalf("unknown name: %d rows, host asked %d times, want 0 rows and one ask", len(rows), asked)
 	}
 }
