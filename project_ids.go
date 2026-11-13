@@ -105,8 +105,10 @@ func (a *App) projectsFreshLocked() bool {
 }
 
 // fetchProjects reads the host once and records the answer or the failure.
-func (a *App) fetchProjects(done chan struct{}) {
-	list, e := a.hostProjects(context.Background())
+// It is bounded by the call that started it: a served process's next call
+// brings its own environment, so the read never outlives its call.
+func (a *App) fetchProjects(ctx context.Context, done chan struct{}) {
+	list, e := a.hostProjects(ctx)
 	a.pmu.Lock()
 	if e != nil {
 		a.projectsFailAt = time.Now() // keep the last good list, if any
@@ -131,7 +133,11 @@ func (a *App) refreshProjects() chan struct{} {
 		return nil
 	}
 	a.pflight, a.pstarted = make(chan struct{}), time.Now()
-	go a.fetchProjects(a.pflight)
+	ctx := a.callCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go a.fetchProjects(ctx, a.pflight)
 	return a.pflight
 }
 

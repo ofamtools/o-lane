@@ -37,7 +37,9 @@ type App struct {
 	projects       []hostProject
 	projectsAt     time.Time
 	projectsFailAt time.Time
+	callCtx        context.Context // the running call's context; nil outside a call
 }
+
 type verbSpec struct {
 	noun, name, description string
 	params                  map[string]ochazuke.Parameter
@@ -74,9 +76,16 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		if len(argv) == 0 {
 			return nil, fmt.Errorf("empty command")
 		}
+		writer, streaming := ctx.Value(commandOutputKey{}).(io.Writer)
+		if !streaming && os.Getenv(ocli.HostPipeEnv) != "" {
+			// Served by a host: a command of the host's program goes over
+			// the pipe (host.run), any other execs (ocli.HostCommand).
+			return ocli.HostCommand(ctx, argv)
+		}
 		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 		cmd.WaitDelay = 500 * time.Millisecond
-		if writer, ok := ctx.Value(commandOutputKey{}).(io.Writer); ok {
+		if streaming {
+			// A stream (live status) writes as it reads; the pipe answers once.
 			cmd.Stdout = writer
 			return nil, wrapExit(argv, cmd.Run())
 		}
@@ -103,6 +112,9 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 		b.Alias(v.aliases...)
 		if v.read {
 			b.Fetch()
+		}
+		if tableVerbs[v.noun+"."+v.name] {
+			b.Table()
 		}
 		if len(v.positional) > 0 {
 			b.Positional(v.positional...)
@@ -133,6 +145,11 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	}
 	return a, nil
 }
+
+// tableVerbs are the verbs whose rows a person at a terminal reads as a
+// table (cli.tty-format auto); a pipe still gets JSON.
+var tableVerbs = map[string]bool{"lane.list": true, "lane.tree": true, "lane.history": true, "plan.lanes": true}
+
 func (a *App) shell() *ocli.Shell {
 	sh := ocli.New(a.r, "o-lane", a.in, a.out, a.errOut, ocli.PeerBindings(ochazuke.Binding{
 		Mode: "normal", Noun: "lane.lane", Keys: "g s", Hint: "send the lane's doc notes to its pane",
@@ -141,7 +158,11 @@ func (a *App) shell() *ocli.Shell {
 	}))
 	sh.Version = version
 	sh.Actor = &a.actor
-	sh.Prepare = func(context.Context) error { return a.configure() }
+	sh.Prepare = func(ctx context.Context) error {
+		// Reads a call starts (the host's projects) are bounded by it.
+		a.callCtx = ctx
+		return a.configure()
+	}
 	sh.Reveal = func(target string) error {
 		q, e := a.store.Resolve(target)
 		if e != nil {
