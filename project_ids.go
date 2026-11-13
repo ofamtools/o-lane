@@ -88,20 +88,92 @@ func resolveProjectRef(projects []hostProject, ref string) projectMatch {
 	return m
 }
 
-// projectIndex is the host's projects, read at most every few seconds: a
-// write or a page draw asks for it once per call, not once per row.
-func (a *App) projectIndex() []hostProject {
-	if a.projectsAt.IsZero() || time.Since(a.projectsAt) > 3*time.Second {
-		list, e := a.hostProjects(context.Background())
-		if e != nil {
-			return nil // no host, no resolution: names stay as stored (not cached)
-		}
-		a.projects, a.projectsAt = list, time.Now()
+// How long a host project list is reused, and how long after a failed read
+// the host is left alone: a failed read is remembered so a page of hundreds
+// of rows asks once, not once per row.
+const (
+	projectsTTL      = 3 * time.Second
+	projectsFailTTL  = 30 * time.Second
+	projectsPageWait = time.Second
+)
+
+func (a *App) projectsFreshLocked() bool {
+	if !a.projectsAt.IsZero() && time.Since(a.projectsAt) <= projectsTTL {
+		return true
 	}
+	return !a.projectsFailAt.IsZero() && time.Since(a.projectsFailAt) <= projectsFailTTL
+}
+
+// fetchProjects reads the host once and records the answer or the failure.
+func (a *App) fetchProjects(done chan struct{}) {
+	list, e := a.hostProjects(context.Background())
+	a.pmu.Lock()
+	if e != nil {
+		a.projectsFailAt = time.Now() // keep the last good list, if any
+	} else {
+		a.projects, a.projectsAt, a.projectsFailAt = list, time.Now(), time.Time{}
+	}
+	a.pflight = nil
+	a.pmu.Unlock()
+	close(done)
+}
+
+// refreshProjects starts a read of the host's projects unless the cache is
+// fresh or one is under way; the returned channel closes when it ends (nil
+// when nothing was started and nothing is pending).
+func (a *App) refreshProjects() chan struct{} {
+	a.pmu.Lock()
+	defer a.pmu.Unlock()
+	if a.pflight != nil {
+		return a.pflight
+	}
+	if a.projectsFreshLocked() {
+		return nil
+	}
+	a.pflight, a.pstarted = make(chan struct{}), time.Now()
+	go a.fetchProjects(a.pflight)
+	return a.pflight
+}
+
+// projectCached is the last list the host gave, however old; it never waits.
+func (a *App) projectCached() []hostProject {
+	a.pmu.Lock()
+	defer a.pmu.Unlock()
 	return a.projects
 }
 
-// linkProjects gives the store its two views of the host's projects.
+// projectIndexWithin is the host's projects, waiting at most wait for a read
+// that is due; on a slow or failed read it is the last good list (or none),
+// so names stay as stored.
+func (a *App) projectIndexWithin(wait time.Duration) []hostProject {
+	if done := a.refreshProjects(); done != nil {
+		// A read already under way has used up part of the wait: callers
+		// after the first do not wait again for a host that is slow.
+		a.pmu.Lock()
+		wait -= time.Since(a.pstarted)
+		a.pmu.Unlock()
+		select {
+		case <-done:
+		case <-time.After(max(wait, 0)):
+		}
+	}
+	return a.projectCached()
+}
+
+// projectIndex is for a write, which needs the host to resolve a typed name:
+// it waits for the read (bounded by hostProjects's own timeout).
+func (a *App) projectIndex() []hostProject {
+	return a.projectIndexWithin(2 * projectsFailTTL)
+}
+
+// projectNow is for drawing: the cached list, with a refresh started behind
+// it; it never waits on the host.
+func (a *App) projectNow() []hostProject {
+	a.refreshProjects()
+	return a.projectCached()
+}
+
+// linkProjects gives the store its views of the host's projects.
 func (a *App) linkProjects() {
 	a.store.ProjectRef = func(ref string) projectMatch {
 		if strings.TrimSpace(ref) == "" {
@@ -109,17 +181,24 @@ func (a *App) linkProjects() {
 		}
 		return resolveProjectRef(a.projectIndex(), ref)
 	}
+	a.store.ProjectRefNow = func(ref string) projectMatch {
+		if strings.TrimSpace(ref) == "" {
+			return projectMatch{Status: projectEmpty}
+		}
+		return resolveProjectRef(a.projectNow(), ref)
+	}
 	a.store.ProjectNameOf = func(id string) string {
 		if id == "" {
 			return ""
 		}
-		for _, p := range a.projectIndex() {
+		for _, p := range a.projectNow() {
 			if p.ID == id {
 				return p.Name
 			}
 		}
 		return ""
 	}
+	a.store.WarmProjects = func() { a.projectIndexWithin(projectsPageWait) }
 }
 
 // projectDisplay is the name a stored project reference is shown as: the
@@ -140,10 +219,36 @@ func (s *Store) projectDisplay(stored, label string) string {
 	return stored
 }
 
+// warmProjectsFor gives a page load one short wait for the host's project
+// names when some lane names a project; after it, rows use what is known and
+// fall back to the name kept on each lane.
+func (s *Store) warmProjectsFor(lanes []Lane) {
+	if s.WarmProjects == nil {
+		return
+	}
+	for _, q := range lanes {
+		if q.Project != "" {
+			s.WarmProjects()
+			return
+		}
+	}
+}
+
 // canonProject is the id a reference resolves to, or the reference itself.
-func (s *Store) canonProject(ref string) string {
-	if s.ProjectRef != nil {
-		if m := s.ProjectRef(ref); m.Matched() {
+func (s *Store) canonProject(ref string) string { return canonVia(s.ProjectRef, ref) }
+
+// canonProjectNow is canonProject for a stored value met while drawing: it
+// never waits on the host.
+func (s *Store) canonProjectNow(ref string) string {
+	if s.ProjectRefNow != nil {
+		return canonVia(s.ProjectRefNow, ref)
+	}
+	return canonVia(s.ProjectRef, ref)
+}
+
+func canonVia(resolve func(string) projectMatch, ref string) string {
+	if resolve != nil {
+		if m := resolve(ref); m.Matched() {
 			return m.ID
 		}
 	}
@@ -151,14 +256,24 @@ func (s *Store) canonProject(ref string) string {
 }
 
 // projectMatcher reports whether a lane's stored project (and the name kept
-// with it) is the queried reference: by id, by name or by kind:id.
+// with it) is the queried reference: by id, by name or by kind:id. It matches
+// without the host (the stored text, the kept name), then through the
+// host's list as far as it is already known; a slow or absent host never
+// hides a lane.
 func (s *Store) projectMatcher(query string) func(stored, label string) bool {
-	q := s.canonProject(query)
+	query = strings.TrimSpace(query)
+	if query != "" && s.WarmProjects != nil {
+		s.WarmProjects()
+	}
+	q := s.canonProjectNow(query)
 	return func(stored, label string) bool {
-		if projectMatches(s.canonProject(stored), q) {
+		if stored == "" {
+			return false
+		}
+		if projectMatches(stored, query) || projectMatches(s.canonProjectNow(stored), q) {
 			return true
 		}
-		return label != "" && stored != "" && strings.EqualFold(label, strings.TrimSpace(query))
+		return label != "" && strings.EqualFold(label, query)
 	}
 }
 

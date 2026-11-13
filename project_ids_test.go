@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const hostProjectsJSON = `{"items":[{"id":"1","name":"Alpha"},{"id":"2","name":"Beta"},{"id":"3","name":"Dup"},{"id":"4","name":"dup"}]}`
@@ -133,5 +134,45 @@ func TestProjectStandaloneKeepsNames(t *testing.T) {
 	}
 	if v := f.a.store.view(mustResolve(t, f.a.store, "x"), nil); v.EffectiveProject != "Beta" {
 		t.Fatalf("shown as %q", v.EffectiveProject)
+	}
+}
+
+// A host that cannot be read (or is slow) must not hold the page: the host is
+// asked once, not once per row, and every lane is listed by the name kept on
+// it, found by name, id or mtm:<id>.
+func TestProjectHostFailureDoesNotHoldRows(t *testing.T) {
+	f := newCLI(t)
+	withHostProjects(f)
+	for _, n := range []string{"a", "b", "c", "d"} {
+		f.call("lane", "add", n, "--project", "beta")
+	}
+	asked := 0
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
+		if strings.Join(argv, " ") == "mtm project list" {
+			asked++
+			<-release // a host that never answers in time
+		}
+		return nil, os.ErrNotExist
+	}
+	f.a.pmu.Lock()
+	f.a.projects, f.a.projectsAt, f.a.projectsFailAt = nil, f.a.projectsAt.Add(-1<<40), f.a.projectsFailAt.Add(-1<<40)
+	f.a.pmu.Unlock()
+	start := time.Now()
+	for _, q := range []string{"Beta", "beta", "2", "mtm:2"} {
+		rows := f.call("lane", "rows", "--project", q).([]any)
+		if len(rows) != 4 {
+			t.Fatalf("project %q with the host down listed %d rows, want 4", q, len(rows))
+		}
+		if m := rows[0].(map[string]any)["data"].(map[string]any); m["project"] != "Beta" {
+			t.Fatalf("project shown as %v, want the kept name", m)
+		}
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("rows waited %v on the host", d)
+	}
+	if asked != 1 {
+		t.Fatalf("host asked %d times, want once", asked)
 	}
 }

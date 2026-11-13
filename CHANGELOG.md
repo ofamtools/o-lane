@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: the Lanes page stayed on `loading…` (standalone: a blank screen) when the host's project list could not be read in time. The name of every row's project was looked up in the host per row, and a failed read was not remembered, so a page of hundreds of lanes ran hundreds of failing (each up to 3 s) reads. Now the host's project list is read once, a failure is remembered for 30 s, drawing never waits on the host (a row shows the host's name when it is already known, else the name kept on the lane, else the stored id), a page load waits at most 1 s for the names, and a project filter matches a lane by name, id or `mtm:<id>` from the stored text and kept name even with the host down. Writes still wait for the host to resolve a typed name.
+
 ## v0.6.0 (2026-11-12)
 
 - Added: the lane's `parent` prop is a reference to a lane and its `task` prop a reference to the host's `task` (`hostNoun`), so ochazuke's relation graph follows them (a mounted mtm reads `lane.task` as a reference to mtm's task; a key that names nothing stays as written). `project`, `repo`, `branch` and `worktree` stay plain strings: they are stored as names or paths, not as the target noun's key. Requires ochazuke v0.114.0 (`hostNoun`); the family word list copy is refreshed.

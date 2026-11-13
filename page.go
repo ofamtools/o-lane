@@ -211,6 +211,7 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 			o.staleLiveRows[q.ID] = aggregateLive(s.stalePanes(rows, q), o.live, snapshots)
 		}
 	}
+	s.warmProjectsFor(rows)
 	return projectLaneRows(s, o, rows)
 }
 
@@ -221,6 +222,7 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 	if e != nil {
 		return nil, e
 	}
+	s.warmProjectsFor(lanes)
 	return projectLaneRows(s, o, lanes)
 }
 func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) {
