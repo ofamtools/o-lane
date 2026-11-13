@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-11-13)
 
 - Fixed: the Lanes page stayed on `loading…` (standalone: a blank screen) when the host's project list could not be read in time. The name of every row's project was looked up in the host per row, and a failed read was not remembered, so a page of hundreds of lanes ran hundreds of failing (each up to 3 s) reads. Now the host's project list is read once, a failure is remembered for 30 s, drawing never waits on the host (a row shows the host's name when it is already known, else the name kept on the lane, else the stored id), a page load waits at most 1 s for the names, and a project filter matches a lane by name, id or `mtm:<id>` from the stored text and kept name even with the host down. Writes still wait for the host to resolve a typed name.
 
