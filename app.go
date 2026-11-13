@@ -18,21 +18,25 @@ import (
 const version = "0.1.0-dev"
 
 type App struct {
-	dir         string
-	store       *Store
-	r           *ochazuke.Runtime
-	actor       Actor
-	in          io.Reader
-	out, errOut io.Writer
-	run         func(context.Context, []string) ([]byte, error)
-	changed     func()
-	showUI      func(View) error
-	rowsLoaded  func([]ocli.Row, error)
-	reader      *liveReader
-	agentsOnce  sync.Once
-	agents      *agentLog
-	projects    []hostProject
-	projectsAt  time.Time
+	dir            string
+	store          *Store
+	r              *ochazuke.Runtime
+	actor          Actor
+	in             io.Reader
+	out, errOut    io.Writer
+	run            func(context.Context, []string) ([]byte, error)
+	changed        func()
+	showUI         func(View) error
+	rowsLoaded     func([]ocli.Row, error)
+	reader         *liveReader
+	agentsOnce     sync.Once
+	agents         *agentLog
+	pmu            sync.Mutex
+	pflight        chan struct{}
+	pstarted       time.Time
+	projects       []hostProject
+	projectsAt     time.Time
+	projectsFailAt time.Time
 }
 type verbSpec struct {
 	noun, name, description string

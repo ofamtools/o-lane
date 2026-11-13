@@ -36,6 +36,10 @@ type Store struct {
 	// then project references are stored and shown as they are.
 	ProjectRef    func(string) projectMatch
 	ProjectNameOf func(string) string
+	// ProjectRefNow is ProjectRef answered from what is already known; it
+	// never waits on the host. WarmProjects gives a page load one short wait.
+	ProjectRefNow func(string) projectMatch
+	WarmProjects  func()
 	Remove        func(string) error
 }
 type UndoChange struct {
