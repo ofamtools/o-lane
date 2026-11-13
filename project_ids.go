@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -92,9 +93,8 @@ func resolveProjectRef(projects []hostProject, ref string) projectMatch {
 // the host is left alone: a failed read is remembered so a page of hundreds
 // of rows asks once, not once per row.
 const (
-	projectsTTL      = 3 * time.Second
-	projectsFailTTL  = 30 * time.Second
-	projectsPageWait = time.Second
+	projectsTTL     = 3 * time.Second
+	projectsFailTTL = 30 * time.Second
 )
 
 func (a *App) projectsFreshLocked() bool {
@@ -166,13 +166,6 @@ func (a *App) projectIndex() []hostProject {
 	return a.projectIndexWithin(2 * projectsFailTTL)
 }
 
-// projectNow is for drawing: the cached list, with a refresh started behind
-// it; it never waits on the host.
-func (a *App) projectNow() []hostProject {
-	a.refreshProjects()
-	return a.projectCached()
-}
-
 // linkProjects gives the store its views of the host's projects.
 func (a *App) linkProjects() {
 	a.store.ProjectRef = func(ref string) projectMatch {
@@ -181,37 +174,14 @@ func (a *App) linkProjects() {
 		}
 		return resolveProjectRef(a.projectIndex(), ref)
 	}
-	a.store.ProjectRefNow = func(ref string) projectMatch {
-		if strings.TrimSpace(ref) == "" {
-			return projectMatch{Status: projectEmpty}
-		}
-		return resolveProjectRef(a.projectNow(), ref)
-	}
-	a.store.ProjectNameOf = func(id string) string {
-		if id == "" {
-			return ""
-		}
-		for _, p := range a.projectNow() {
-			if p.ID == id {
-				return p.Name
-			}
-		}
-		return ""
-	}
-	a.store.WarmProjects = func() { a.projectIndexWithin(projectsPageWait) }
 }
 
 // projectDisplay is the name a stored project reference is shown as: the
-// host's name for the id, else the name kept on the lane, else the stored
-// value.
+// name kept on the lane with it, else the stored value. A read never asks the
+// host, so a renamed project keeps its old name until a write touches the row.
 func (s *Store) projectDisplay(stored, label string) string {
 	if stored == "" {
 		return ""
-	}
-	if s.ProjectNameOf != nil {
-		if n := s.ProjectNameOf(stored); n != "" {
-			return n
-		}
 	}
 	if label != "" {
 		return label
@@ -219,32 +189,8 @@ func (s *Store) projectDisplay(stored, label string) string {
 	return stored
 }
 
-// warmProjectsFor gives a page load one short wait for the host's project
-// names when some lane names a project; after it, rows use what is known and
-// fall back to the name kept on each lane.
-func (s *Store) warmProjectsFor(lanes []Lane) {
-	if s.WarmProjects == nil {
-		return
-	}
-	for _, q := range lanes {
-		if q.Project != "" {
-			s.WarmProjects()
-			return
-		}
-	}
-}
-
 // canonProject is the id a reference resolves to, or the reference itself.
 func (s *Store) canonProject(ref string) string { return canonVia(s.ProjectRef, ref) }
-
-// canonProjectNow is canonProject for a stored value met while drawing: it
-// never waits on the host.
-func (s *Store) canonProjectNow(ref string) string {
-	if s.ProjectRefNow != nil {
-		return canonVia(s.ProjectRefNow, ref)
-	}
-	return canonVia(s.ProjectRef, ref)
-}
 
 func canonVia(resolve func(string) projectMatch, ref string) string {
 	if resolve != nil {
@@ -257,23 +203,35 @@ func canonVia(resolve func(string) projectMatch, ref string) string {
 
 // projectMatcher reports whether a lane's stored project (and the name kept
 // with it) is the queried reference: by id, by name or by kind:id. It matches
-// without the host (the stored text, the kept name), then through the
-// host's list as far as it is already known; a slow or absent host never
-// hides a lane.
-func (s *Store) projectMatcher(query string) func(stored, label string) bool {
+// from what is stored. The host is asked only when the query names nothing
+// stored: at once when rows are given and none of them matches, else (a write
+// with no rows) on the first stored value that does not match directly. A
+// slow or absent host never hides a lane.
+func (s *Store) projectMatcher(query string, rows []Lane) func(stored, label string) bool {
 	query = strings.TrimSpace(query)
-	if query != "" && s.WarmProjects != nil {
-		s.WarmProjects()
+	direct := func(stored, label string) bool {
+		return stored != "" && (projectMatches(stored, query) || label != "" && strings.EqualFold(label, query))
 	}
-	q := s.canonProjectNow(query)
+	asked, id := false, ""
+	ask := func() {
+		if !asked {
+			asked, id = true, s.canonProject(query)
+		}
+	}
+	if query != "" && rows != nil && !slices.ContainsFunc(rows, func(q Lane) bool { return direct(q.Project, q.ProjectLabel) }) {
+		ask()
+	}
 	return func(stored, label string) bool {
 		if stored == "" {
 			return false
 		}
-		if projectMatches(stored, query) || projectMatches(s.canonProjectNow(stored), q) {
+		if direct(stored, label) {
 			return true
 		}
-		return label != "" && strings.EqualFold(label, query)
+		if rows == nil && query != "" {
+			ask()
+		}
+		return asked && (projectMatches(stored, id) || projectMatches(s.canonProject(stored), id))
 	}
 }
 

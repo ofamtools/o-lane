@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -31,16 +32,12 @@ type Store struct {
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
 	PanesShared bool
 	Permit      func(string) error
-	// ProjectRef resolves a project reference against the host's projects and
-	// ProjectNameOf names a project by id; both nil when there is no host, and
-	// then project references are stored and shown as they are.
-	ProjectRef    func(string) projectMatch
-	ProjectNameOf func(string) string
-	// ProjectRefNow is ProjectRef answered from what is already known; it
-	// never waits on the host. WarmProjects gives a page load one short wait.
-	ProjectRefNow func(string) projectMatch
-	WarmProjects  func()
-	Remove        func(string) error
+	// ProjectRef resolves a typed project reference against the host's
+	// projects (nil when there is no host, and then references are stored as
+	// typed). Reads never call it for a stored value: they use the stored id
+	// and the name kept beside it.
+	ProjectRef func(string) projectMatch
+	Remove     func(string) error
 }
 type UndoChange struct {
 	ID      string   `json:"id"`
@@ -74,9 +71,15 @@ func (s *Store) statusRows() []Status {
 	if len(s.Statuses) > 0 {
 		return s.Statuses
 	}
+	return defaultStatusRows()
+}
+
+// defaultStatusRows parses the built-in statuses once, not per call.
+var defaultStatusRows = sync.OnceValue(func() []Status {
 	rows, _ := parseStatuses(defaultStatuses)
 	return rows
-}
+})
+
 func (s *Store) statuses() map[string]Status {
 	out := map[string]Status{}
 	for _, x := range s.statusRows() {

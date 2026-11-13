@@ -129,7 +129,8 @@ func (s *Store) view(q Lane, rows []Lane) View {
 	v := View{Lane: q, EstimateMinutes: estimateMinutes(q.Estimate), RolledStatus: q.Status, Association: "unassociated", ProjectAssociation: "unassociated"}
 	v.EffectiveProjectID, v.ProjectFrom, v.EffectiveProjectLabel = effectiveProjectLabel(rows, q)
 	v.EffectiveProject = s.projectDisplay(v.EffectiveProjectID, v.EffectiveProjectLabel)
-	v.StatusDescription = s.statuses()[q.Status].Description
+	statuses := s.statuses()
+	v.StatusDescription = statuses[q.Status].Description
 	v.StatusReason = statusReason(q.History)
 	switch {
 	case v.ProjectFrom == q.ID:
@@ -143,7 +144,7 @@ func (s *Store) view(q Lane, rows []Lane) View {
 		}
 	}
 	for _, e := range activeHistory(q.History) {
-		st, ok := s.statuses()[e.To]
+		st, ok := statuses[e.To]
 		if !ok || st.Archive || (e.Kind != "status" && e.Kind != "create") {
 			continue
 		}
@@ -161,8 +162,9 @@ func (s *Store) view(q Lane, rows []Lane) View {
 	// configured open status present, then the first configured closed status.
 	if q.Parent == "" {
 		present := map[string]bool{}
+		below := subtreeIDs(rows, q.ID)
 		for _, c := range rows {
-			if c.ID != q.ID && !s.statuses()[c.Status].Archive && descendant(rows, c.ID, q.ID) {
+			if c.ID != q.ID && below[c.ID] && !statuses[c.Status].Archive {
 				present[c.Status] = true
 			}
 		}
@@ -213,6 +215,29 @@ func parseStatuses(raw string) ([]Status, error) {
 	}
 	return out, nil
 }
+
+// subtreeIDs is the id and every descendant id of root: the ids descendant
+// reports true for, from one parent-to-children map instead of a walk per lane.
+func subtreeIDs(rows []Lane, root string) map[string]bool {
+	children, first := map[string][]string{}, map[string]bool{}
+	for _, r := range rows {
+		if !first[r.ID] {
+			first[r.ID] = true
+			children[r.Parent] = append(children[r.Parent], r.ID)
+		}
+	}
+	ids := map[string]bool{root: true}
+	for queue := []string{root}; len(queue) > 0; queue = queue[1:] {
+		for _, c := range children[queue[0]] {
+			if !ids[c] {
+				ids[c] = true
+				queue = append(queue, c)
+			}
+		}
+	}
+	return ids
+}
+
 func descendant(rows []Lane, id, parent string) bool {
 	seen := map[string]bool{}
 	for id != "" && !seen[id] {

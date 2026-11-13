@@ -116,7 +116,7 @@ func (a *App) treeViews(k *call, rows []Lane, statuses []string) []View {
 	out := []View{}
 	kept := statusKept(rows, statuses)
 	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
-	match := s.projectMatcher(k.project)
+	match := s.projectMatcher(k.project, rows)
 	inProject := func(q Lane) bool {
 		return (k.project == "" || subtreeProject(rows, q, match)) && (kept == nil || kept[q.ID]) && !hidden[q.ID]
 	}
@@ -154,7 +154,7 @@ func (a *App) flatViews(k *call, rows []Lane, statuses []string) ([]View, error)
 		parent = q.ID
 	}
 	out := []View{}
-	match := s.projectMatcher(k.project)
+	match := s.projectMatcher(k.project, rows)
 	for _, q := range rows {
 		v := s.view(q, rows)
 		if (parent == "" || q.Parent == parent) && (k.project == "" || v.EffectiveProjectID != "" && match(v.EffectiveProjectID, v.EffectiveProjectLabel)) && inStatuses(statuses, q) && !hidden[q.ID] {
@@ -428,7 +428,7 @@ func (a *App) runProjectLanes(k *call) ochazuke.Result {
 	}
 	out := []View{}
 	hidden := s.archiveHidden(rows, statuses, a.r.Settings().Bool("collection.hide-archived"))
-	match := s.projectMatcher(k.project)
+	match := s.projectMatcher(k.project, rows)
 	for _, q := range rows {
 		if v := s.view(q, rows); v.EffectiveProjectID != "" && match(v.EffectiveProjectID, v.EffectiveProjectLabel) && inStatuses(statuses, q) && !hidden[q.ID] {
 			out = append(out, v)

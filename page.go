@@ -206,12 +206,12 @@ func loadLaneRows(ctx context.Context, s *Store, o pageOptions, reader *liveRead
 		}
 		o.liveRows = map[string]Live{}
 		o.staleLiveRows = map[string]Live{}
+		tree, statuses := s.paneTree(rows), s.statuses()
 		for _, q := range rows {
-			o.liveRows[q.ID] = aggregateLive(s.panesInSubtree(rows, q), o.live, snapshots)
-			o.staleLiveRows[q.ID] = aggregateLive(s.stalePanes(rows, q), o.live, snapshots)
+			o.liveRows[q.ID] = aggregateLive(tree.subtree(q, nil), o.live, snapshots)
+			o.staleLiveRows[q.ID] = aggregateLive(tree.stale(q, statuses), o.live, snapshots)
 		}
 	}
-	s.warmProjectsFor(rows)
 	return projectLaneRows(s, o, rows)
 }
 
@@ -222,7 +222,6 @@ func laneRows(s *Store, o pageOptions) ([]ocli.Row, error) {
 	if e != nil {
 		return nil, e
 	}
-	s.warmProjectsFor(lanes)
 	return projectLaneRows(s, o, lanes)
 }
 func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) {
@@ -269,7 +268,8 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 	// then do not flag them, so the list's own archive hiding leaves them be.
 	asked := slices.ContainsFunc(o.statuses, func(name string) bool { return s.statuses()[name].Archive })
 	rolls := s.rollups(lanes)
-	projectMatch := s.projectMatcher(o.project)
+	panes := s.paneTree(lanes)
+	projectMatch := s.projectMatcher(o.project, lanes)
 	var walk func(string)
 	walk = func(parent string) {
 		for _, q := range lanes {
@@ -331,7 +331,7 @@ func projectLaneRows(s *Store, o pageOptions, lanes []Lane) ([]ocli.Row, error) 
 			pane := ""
 			roles := map[string]int{}
 			for _, p := range q.Panes {
-				if holder := paneHolder(lanes, q.ID, p); !s.PanesShared && holder != "" {
+				if holder := panes.holder(q.ID, p); !s.PanesShared && holder != "" {
 					// Another lane associated this pane later: it is history
 					// here, so it shows no role, agent or live status.
 					name := holder

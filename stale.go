@@ -10,10 +10,11 @@ import (
 // independent of role filters and presentation labels. Unknown evidence
 // cannot prove that nobody is working. It never changes status or history.
 func (s *Store) stalePanes(rows []Lane, q Lane) []Pane {
-	statuses := s.statuses()
-	return s.panesInSubtreeWhere(rows, q, func(row Lane) bool {
-		return statuses[row.Status].Starts
-	})
+	return s.paneTree(rows).stale(q, s.statuses())
+}
+
+func (t *paneTree) stale(q Lane, statuses map[string]Status) []Pane {
+	return t.subtree(q, func(row Lane) bool { return statuses[row.Status].Starts })
 }
 
 func staleLane(q Lane, statuses map[string]Status, live Live, enabled bool, now time.Time) (bool, string) {
