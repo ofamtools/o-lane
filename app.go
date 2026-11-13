@@ -197,6 +197,7 @@ func (a *App) configure() error {
 		presets = map[string]string{}
 	}
 	a.store.StatusPresets = presets
+	a.store.RestorePresets = cfg.Strings("lanes.restore-presets")
 	a.store.BackupDaily = cfg.Bool("backup.daily")
 	a.store.BackupKeep = cfg.Int("backup.keep")
 	a.store.HistoryKeep = cfg.Int("history.keep")
@@ -213,7 +214,7 @@ func (a *App) specs() []verbSpec {
 		}
 		return m
 	}
-	fields := map[string]ochazuke.Parameter{"name": required("Lane name"), "parent": param("Parent lane; empty is a root"), "wording": param("Owner's verbatim words")}
+	fields := map[string]ochazuke.Parameter{"name": required("Lane name; empty saves untitled-STAMP"), "parent": param("Parent lane; empty is a root"), "wording": param("Owner's verbatim words")}
 	for _, p := range editable {
 		fields[p] = param("Lane " + p)
 	}
@@ -253,7 +254,7 @@ func (a *App) specs() []verbSpec {
 		name, desc string
 		run        func(*App, *call) ochazuke.Result
 		extra      map[string]ochazuke.Parameter
-	}{{"park", "Park", (*App).runLanePreset, nil}, {"merge", "Record merge and optional commit", (*App).runLaneMerge, nil}, {"finish", "Mark done", (*App).runLanePreset, nil}, {"cancel", "Cancel", (*App).runLanePreset, nil}, {"reopen", "Reopen as planned", (*App).runLanePreset, nil}, {"archive", "Archive: hide from the default views, keep the record; restore undoes it. With --finished-trees, archive every fully complete root tree", (*App).runLaneArchive, finishedParams}} {
+	}{{"park", "Park", (*App).runLanePreset, nil}, {"merge", "Record merge and optional commit", (*App).runLaneMerge, nil}, {"finish", "Mark done", (*App).runLanePreset, nil}, {"cancel", "Cancel", (*App).runLanePreset, nil}, {"reopen", "Reopen: the open status it had before it was closed (lanes.restore-presets), else planned", (*App).runLanePreset, nil}, {"archive", "Archive: hide from the default views, keep the record; restore undoes it. With --finished-trees, archive every fully complete root tree", (*App).runLaneArchive, finishedParams}} {
 		params := map[string]ochazuke.Parameter{"note": param("History note"), "commit": param("Merge commit")}
 		maps.Copy(params, v.extra)
 		rows = append(rows, verbSpec{"lane", v.name, v.desc, common(params), []string{"target"}, false, "", v.run, nil, false})
@@ -318,6 +319,7 @@ func (a *App) bindActor(c ochazuke.Ctx) {
 
 	s := a.store
 	s.Actor = c.Actor()
+	s.Notice = func(text string) { c.Notify(text) }
 	// Store direct callers use the same defaults. App calls honour owner rights
 	// overrides using the one framework policy source, never a second allowlist.
 	s.Permit = func(action string) error {

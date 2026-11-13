@@ -54,14 +54,16 @@ func setSpec(q *Spec, prop string, value any) error {
 }
 func (s *Store) add(rows *[]Lane, spec Spec) (Lane, error) {
 	if strings.TrimSpace(spec.Name) == "" {
-		return Lane{}, errors.New("lane name must not be empty")
+		// Record first: an empty name is saved as untitled-STAMP, renamed later.
+		spec.Name = s.untitled(0)
+		s.notice(fmt.Sprintf("no lane name; saved as %s", spec.Name))
 	}
 	if spec.Parent != "" {
-		p, e := resolveExact(visible(*rows), spec.Parent)
+		parent, e := s.parentOrTop(*rows, spec.Parent)
 		if e != nil {
 			return Lane{}, e
 		}
-		spec.Parent = p.ID
+		spec.Parent = parent
 	}
 	id := slug(spec.Name)
 	base := id
@@ -114,8 +116,32 @@ func validateDefinitions(specs []Spec) error {
 	return nil
 }
 
+// untitled is the name a lane typed without one is saved under (the n-th
+// of a batch after the first gets -n).
+func (s *Store) untitled(n int) string {
+	name := "untitled-" + s.now().Format("20060102-150405")
+	if n > 0 {
+		name += "-" + strconv.Itoa(n+1)
+	}
+	return name
+}
+
+// fillUntitled names each definition with an empty name untitled-STAMP
+// (record first), with a notice.
+func (s *Store) fillUntitled(specs []Spec) {
+	n := 0
+	for i := range specs {
+		if strings.TrimSpace(specs[i].Name) == "" {
+			specs[i].Name = s.untitled(n)
+			s.notice(fmt.Sprintf("lane %d has no name; saved as %s", i+1, specs[i].Name))
+			n++
+		}
+	}
+}
+
 // Supplied fields retain explicit empty values from JSON or a table.
 func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lane, err error) {
+	s.fillUntitled(specs)
 	if err = validateDefinitions(specs); err != nil {
 		return nil, err
 	}
@@ -151,11 +177,11 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 						}
 						spec.Parent = id
 					} else {
-						p, e := resolveExact(visible(*rows), spec.Parent)
+						parent, e := s.parentOrTop(*rows, spec.Parent)
 						if e != nil {
 							return e
 						}
-						spec.Parent = p.ID
+						spec.Parent = parent
 					}
 				}
 				index := -1
@@ -168,11 +194,14 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 					}
 				}
 				if index < 0 {
-					q, e := s.add(rows, spec)
-					if e != nil {
+					if _, e := s.add(rows, spec); e != nil {
 						return e
 					}
-					out = append(out, q)
+					q := &(*rows)[len(*rows)-1]
+					if e := s.patch(q, lifecycleFields(supplied, item.Index)); e != nil {
+						return e
+					}
+					out = append(out, *q)
 					defined[item.Index] = q.ID
 				} else {
 					q := &(*rows)[index]
@@ -198,6 +227,9 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 					if !reflect.DeepEqual(before, q.Spec) {
 						s.entry(q, "edit", "", "", "define", nil, nil)
 					}
+					if e = s.patch(q, lifecycleFields(supplied, item.Index)); e != nil {
+						return e
+					}
 					out = append(out, *q)
 					defined[item.Index] = q.ID
 				}
@@ -212,6 +244,22 @@ func (s *Store) defineFields(specs []Spec, supplied []map[string]any) (out []Lan
 	})
 	return
 }
+
+// lifecycleFields are the lifecycle props (status, archived, reason) a
+// definition supplied, written as lane set writes them.
+func lifecycleFields(supplied []map[string]any, i int) map[string]any {
+	out := map[string]any{}
+	if i >= len(supplied) {
+		return out
+	}
+	for _, prop := range lifecycleProps {
+		if v, ok := supplied[i][prop]; ok && v != nil {
+			out[prop] = v
+		}
+	}
+	return out
+}
+
 func (s *Store) Set(target, prop string, value any) (Lane, error) {
 	return s.mutate("set", target, func(q *Lane, _ *[]Lane) error {
 		if e := setSpec(&q.Spec, prop, value); e != nil {
@@ -384,9 +432,7 @@ func (s *Store) StatusAs(action, target, status, note string) (Lane, error) {
 }
 func (s *Store) Annotate(target, text string) (Lane, error) {
 	return s.mutate("annotate", target, func(q *Lane, _ *[]Lane) error {
-		if strings.TrimSpace(text) == "" {
-			return errors.New("note must not be empty")
-		}
+		// Record first: an empty note is saved like any other.
 		s.entry(q, "note", "", "", text, nil, nil)
 		return nil
 	})
@@ -546,7 +592,33 @@ func (s *Store) preset(q *Lane, verb, note string) error {
 	if _, ok := s.statuses()[status]; !ok {
 		return fmt.Errorf("lanes.status-presets: preset %q names %q, which is absent from lanes.statuses", verb, status)
 	}
+	if slices.Contains(s.RestorePresets, verb) {
+		if before := s.openBeforeClosed(q); before != "" {
+			status = before
+		}
+	}
 	return s.status(q, status, note)
+}
+
+// openBeforeClosed is the open status a closed lane had before the latest
+// move into its current status; "" when the lane is open or had none.
+func (s *Store) openBeforeClosed(q *Lane) string {
+	statuses := s.statuses()
+	if statuses[q.Status].Open {
+		return ""
+	}
+	history := activeHistory(q.History)
+	for i := len(history) - 1; i >= 0; i-- {
+		e := history[i]
+		if e.Kind != "status" || e.To != q.Status {
+			continue
+		}
+		if from, ok := statuses[e.From]; ok && from.Open && !from.Archive {
+			return e.From
+		}
+		return ""
+	}
+	return ""
 }
 func (s *Store) Preset(target, verb, note string) (Lane, error) {
 	return s.mutate(verb, target, func(q *Lane, _ *[]Lane) error { return s.preset(q, verb, note) })

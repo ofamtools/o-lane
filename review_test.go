@@ -28,8 +28,9 @@ func TestStoreDefineExactParents(t *testing.T) {
 	if q := mustResolve(t, s, "child"); q.Parent != "core" {
 		t.Fatalf("prefix parent won: %+v", q)
 	}
-	if _, e = s.Add(Spec{Name: "bad-prefix", Parent: "core-u"}); e == nil {
-		t.Fatal("add accepted a parent prefix")
+	// A parent prefix is no parent: the lane is saved at the top level.
+	if q, e := s.Add(Spec{Name: "bad-prefix", Parent: "core-u"}); e != nil || q.Parent != "" {
+		t.Fatal("add used a parent prefix", q.Parent, e)
 	}
 	// A batch name also wins over a pre-existing exact ID of the same text.
 	mustAdd(t, s, Spec{Name: "collision"})

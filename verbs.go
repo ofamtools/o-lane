@@ -68,9 +68,13 @@ func (a *App) runLaneAdd(k *call) ochazuke.Result {
 	return done(q, e)
 }
 
-func (a *App) runLaneDefine(k *call) ochazuke.Result { return a.define(k.c.Args) }
+func (a *App) runLaneDefine(k *call) ochazuke.Result {
+	return a.define(k.c.Args, func(s string) { k.c.Notify(s) })
+}
 
-func (a *App) runPlanDefine(k *call) ochazuke.Result { return a.define(k.c.Args) }
+func (a *App) runPlanDefine(k *call) ochazuke.Result {
+	return a.define(k.c.Args, func(s string) { k.c.Notify(s) })
+}
 
 func (a *App) runPlanLanes(k *call) ochazuke.Result { return a.planLanes(k.str("plan")) }
 

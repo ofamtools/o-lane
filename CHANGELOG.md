@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Fixed (SC-071): `lane define` dropped `status` without a word. It now takes every lifecycle prop `lane set` takes (`status`, `reason`, `archived`, through the same patch) beside the spec fields, and names any other key in a notice with did-you-mean (`unknown key "stauts" was not saved (did you mean "status"?)`); the rest of the row is kept.
+- Changed (record first, ER-0577/ER-0580, S15): a lane whose parent names no lane is saved at the top level with the notice `unknown lane X; saved at the top level` (as `task new --parent` does), instead of refusing; an empty lane name is saved as `untitled-STAMP` with a notice; an empty note is recorded. Undo removes each.
+- Changed (CS-008): `reopen` returns a closed lane to the open status it had before it was closed (as restoring from the archive does), else `planned`. New setting `lanes.restore-presets` (default `["reopen"]`; empty restores the old behaviour). A `reason` written alone (`lane set ID reason=...`) is now the status's shown reason (history kind `reason`).
+- Added: `lane list`, `lane tree`, `lane history` and `plan lanes` print a table at a terminal (`cli.tty-format`, ochazuke v0.135.0); a pipe still gets JSON.
+- Changed (persistent connections): served by a host (`ochazuke host serve`), pane commands of the host's program go over the pipe (`ocli.HostCommand`); the host's project read is bounded by the call that started it. The catalog does not yet declare `serve`: the shell's actor is read once per process, so a served call could run with an earlier call's identity (needs a per-call actor hook in ochazuke).
+- Changed (tuios purge): identity reads `MTM_<name>` only (`paneenv.go` removed; no `TUIOS_` fallback). `noServerStatus` ships no row (mtm exits 1 with no daemon). `decodeTuiosList` is `decodePaneList`; test stubs and docs name mtm.
+- Deps: ochazuke v0.135.0; the family word list copy gains `look`, `rail`, `resize`.
+
 ## v0.9.0 (2026-11-13)
 
 - Changed: live status reads one session per `mtm session list-panes` call, now run concurrently (4 at a time) instead of one after another, and once per host/session per read. A list over 6 sessions waits for about two process starts, not six. A failed or slow session still leaves only its own panes `unknown` (3 s limit each). A mounted o-lane still execs the host command, as `mtm` offers no in-process call; `mtm pane list` is not used because it carries no state time.

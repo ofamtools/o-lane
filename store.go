@@ -24,10 +24,17 @@ type Store struct {
 	Now           func() time.Time
 	Statuses      []Status
 	StatusPresets map[string]string
-	Warn          func(string)
-	BackupDaily   bool
-	BackupKeep    int
-	HistoryKeep   int // undo entries retained; 0 keeps all
+	// RestorePresets are the presets (lanes.restore-presets) that return a
+	// closed lane to the open status it had before it was closed.
+	RestorePresets []string
+	Warn           func(string)
+	// Notice tells the person running the change something it did instead
+	// of refusing (a missing parent saved the lane at the top level); nil
+	// falls back to Warn.
+	Notice      func(string)
+	BackupDaily bool
+	BackupKeep  int
+	HistoryKeep int // undo entries retained; 0 keeps all
 	// PanesShared lets one pane belong to several lanes at once
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
 	PanesShared bool
@@ -287,7 +294,35 @@ func resolveMatches(rows []Lane, target string, prefix bool) (Lane, error) {
 	if len(matches) > 1 {
 		return Lane{}, fmt.Errorf("ambiguous lane %q (%d matches)", target, len(matches))
 	}
-	return Lane{}, fmt.Errorf("lane %q not found", target)
+	return Lane{}, fmt.Errorf("lane %q %w", target, errLaneNotFound)
+}
+
+// errLaneNotFound is a lookup that matched no lane (not an ambiguous one).
+var errLaneNotFound = errors.New("not found")
+
+// notice tells the person what a change did instead of refusing.
+func (s *Store) notice(text string) {
+	switch {
+	case s.Notice != nil:
+		s.Notice(text)
+	case s.Warn != nil:
+		s.Warn("notice: " + text)
+	}
+}
+
+// parentOrTop resolves a parent reference to its id; a parent that names
+// no lane is never a refusal (record first): the lane is saved at the top
+// level with a notice, as a task with a missing parent is.
+func (s *Store) parentOrTop(rows []Lane, parent string) (string, error) {
+	p, e := resolveExact(visible(rows), parent)
+	if errors.Is(e, errLaneNotFound) {
+		s.notice(fmt.Sprintf("unknown lane %s; saved at the top level", parent))
+		return "", nil
+	}
+	if e != nil {
+		return "", e
+	}
+	return p.ID, nil
 }
 func (s *Store) ListAll() (out []Lane, err error) {
 	err = s.locked(func() error { var e error; out, e = s.all(); return e })

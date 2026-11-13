@@ -226,9 +226,17 @@ func archiveFlag(v any) (bool, error) {
 	return false, fmt.Errorf("%s: expected true or false", archiveProp)
 }
 
-// patchLane applies one set to a lane: the props in key order, with the
+// patchLane applies one set to a lane (Store.patch).
+func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error { return a.store.patch(q, changes) }
+
+// lifecycleProps are the lane props a write records as a lifecycle change
+// (status, archived) or as that change's note (reason). lane set and lane
+// define write them through the same patch.
+var lifecycleProps = []string{statusProp, archiveProp, reasonProp}
+
+// patch applies one set to a lane: the props in key order, with the
 // reason as the note of the status (or archived) change in the same write.
-func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error {
+func (s *Store) patch(q *Lane, changes map[string]any) error {
 	keys := make([]string, 0, len(changes))
 	for key := range changes {
 		keys = append(keys, key)
@@ -244,7 +252,7 @@ func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error {
 			continue
 		}
 		if key == statusProp {
-			if e := a.store.status(q, fmt.Sprint(changes[key]), reason); e != nil {
+			if e := s.status(q, fmt.Sprint(changes[key]), reason); e != nil {
 				return e
 			}
 			hasReason = false
@@ -255,7 +263,7 @@ func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error {
 			if e != nil {
 				return e
 			}
-			if e = a.store.setArchived(q, on, reason); e != nil {
+			if e = s.setArchived(q, on, reason); e != nil {
 				return e
 			}
 			hasReason = false
@@ -267,10 +275,11 @@ func (a *App) patchLane(q *Lane, changes ochazuke.Thing) error {
 		edited = true
 	}
 	if hasReason && strings.TrimSpace(reason) != "" {
-		a.store.entry(q, "note", "", "", reason, nil, nil)
+		// A reason written alone is the current status's reason (statusReason).
+		s.entry(q, reasonProp, "", "", reason, nil, nil)
 	}
 	if edited {
-		a.store.entry(q, "edit", "", "", "set", nil, nil)
+		s.entry(q, "edit", "", "", "set", nil, nil)
 	}
 	return nil
 }

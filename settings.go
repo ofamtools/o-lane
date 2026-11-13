@@ -46,6 +46,7 @@ func appSettings() []ochazuke.Setting {
 	rows := []ochazuke.Setting{
 		{Name: "lanes.refresh", Type: ochazuke.SettingDuration, Default: 5 * time.Second, Description: "Standalone page refresh interval; zero disables polling"},
 		{Name: "lanes.status-presets", Type: ochazuke.SettingString, Default: defaultStatusPresets, Description: "JSON preset verb to lifecycle status map; targets must exist in lanes.statuses"},
+		{Name: "lanes.restore-presets", Type: ochazuke.SettingList, Default: []string{"reopen"}, Description: "Presets that return a closed lane to the open status it had before it was closed (as restoring from the archive does); the preset's own status when it had none. Empty: every preset goes to its status"},
 		{Name: "lanes.link-kinds", Type: ochazuke.SettingList, Default: []string{"commit", "pr", "doc", "report", "question", "plan", "task", "url", "retry-of"}, Description: "Link kinds accepted by link/unlink"},
 		{Name: "lanes.doc-link-kinds", Type: ochazuke.SettingList, Default: []string{"doc", "report"}, Description: "Link kinds used for the lane row's doc; newest matching link wins; empty disables doc selection"},
 		{Name: "lanes.import-columns", Type: ochazuke.SettingString, Default: defaultImportColumns, Validate: func(v any) error { _, e := parseImportColumns(fmt.Sprint(v)); return e }, Description: "JSON markdown header to spec field map; case-insensitive, longest matching header prefix"},

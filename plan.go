@@ -301,7 +301,7 @@ func (a *App) checkPlans(dir string, columns map[string]string) (planChecks, err
 	return out, e
 }
 
-func (a *App) define(args ochazuke.Arguments) ochazuke.Result {
+func (a *App) define(args ochazuke.Arguments, warn func(string)) ochazuke.Result {
 	str := func(k string) string { return ochazuke.StringArg(args, k, "") }
 	dry, _ := args["dry-run"].(bool)
 	_, hasJSON := args["lanes"]
@@ -340,6 +340,14 @@ func (a *App) define(args ochazuke.Arguments) ochazuke.Result {
 		}
 		if e := decode(args["lanes"], &fields); e != nil {
 			return done(nil, e)
+		}
+		// A key that is no spec field and no prop lane set writes is
+		// named, never dropped in silence (and never refused).
+		known := append(jsonFields(Spec{}), lifecycleProps...)
+		for i, row := range fields {
+			for _, text := range unknownKeys(row, known) {
+				warn(fmt.Sprintf("lane define: lane %d (%q): %s", i+1, specs[i].Name, text))
+			}
 		}
 	} else {
 		columns, e := parseImportColumns(a.r.Settings().String("lanes.import-columns"))
@@ -384,6 +392,7 @@ func (a *App) define(args ochazuke.Arguments) ochazuke.Result {
 			}
 		}
 	}
+	a.store.fillUntitled(specs)
 	if e := validateDefinitions(specs); e != nil {
 		return done(nil, e)
 	}

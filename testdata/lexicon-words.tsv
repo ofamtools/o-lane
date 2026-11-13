@@ -944,3 +944,6 @@ zoom-in	action	seed
 zoom-out	action	seed	
 zoom-reset	action	seed	
 lane-detail	noun	yes	o-lane page detail pane noun
+look	action	yes	och-rail-focus: ochazuke.rail.look sets the rail's look (rail.look: full or float)
+rail	noun	yes	och-rail-focus: the rail region beside a page's main area (ochazuke.rail)
+resize	action	yes	och-rail-focus: ochazuke.rail.resize sets the rail's width (rail.width)

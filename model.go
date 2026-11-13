@@ -284,6 +284,11 @@ func statusReason(history []Entry) string {
 	h := activeHistory(history)
 	last := -1
 	for i := len(h) - 1; i >= 0; i-- {
+		// A reason written after the status change (lane set reason=...)
+		// is that status's reason now.
+		if text := strings.TrimSpace(h[i].Text); h[i].Kind == reasonProp && text != "" {
+			return text
+		}
 		if h[i].Kind == "status" || h[i].Kind == "create" {
 			last = i
 			break

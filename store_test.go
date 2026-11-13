@@ -191,9 +191,9 @@ func TestStoreDefineAtomicAndIdempotent(t *testing.T) {
 		t.Fatal(rows)
 	}
 	before, _ := s.List()
-	_, e = s.Define([]Spec{{Name: "valid"}, {Name: "bad", Parent: "missing"}})
+	_, e = s.Define([]Spec{{Name: "valid"}, {Name: "bad", Parent: "worse"}, {Name: "worse", Parent: "bad"}})
 	if e == nil {
-		t.Fatal("unresolved parent accepted")
+		t.Fatal("cyclic parent accepted")
 	}
 	after, _ := s.List()
 	if !reflect.DeepEqual(before, after) {
