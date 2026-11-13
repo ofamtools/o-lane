@@ -9,11 +9,11 @@ import (
 
 // noServerStatus is the data behind "the tool is up but has nothing to talk
 // to": the exit status a program uses when its daemon or server is not
-// running, by program name. tuios exits 3 for that (a distinct status so a
-// script tells "no daemon" from "the daemon answered" and from a real failure;
-// cmd/tuios/diagnostics.go noDaemonStatus) and prints an empty JSON list. A
-// tool is added here as one row; nothing else changes.
-var noServerStatus = map[string]int{"tuios": 3}
+// running, by program name, so a script tells "no daemon" from "the daemon
+// answered" and from a real failure. mtm has no distinct status (it exits 1
+// with no daemon), so no row is shipped; a pane CLI that has one is added
+// here as one row and nothing else changes.
+var noServerStatus = map[string]int{}
 
 // commandError is a finished command that exited nonzero. Its message says
 // which command failed, with what status, and what it printed on stderr,

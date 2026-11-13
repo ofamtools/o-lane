@@ -25,13 +25,13 @@ func TestOMPActorIdentity(t *testing.T) {
 		env  map[string]string
 		want Actor
 	}{
-		{"session", map[string]string{"PI_SESSION_ID": "run-1", "PI_SESSION_FILE": "/fixture/run.jsonl", "TUIOS_PANE_ID": "pane", "TUIOS_SESSION": "session"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1", Pane: "pane", Session: "session"}},
+		{"session", map[string]string{"PI_SESSION_ID": "run-1", "PI_SESSION_FILE": "/fixture/run.jsonl", "MTM_PANE_ID": "pane", "MTM_SESSION": "session"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1", Pane: "pane", Session: "session"}},
 		{"file signal", map[string]string{"PI_SESSION_FILE": "/fixture/run.jsonl"}, Actor{Kind: "agent", Harness: "omp"}},
 		{"generic model", map[string]string{"PI_SESSION_ID": "run-1", "AGENT_MODEL": "model-a"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1", Model: "model-a"}},
 		{"framework model", map[string]string{"PI_SESSION_ID": "run-1", "OCHAZUKE_MODEL": "model-b"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1", Model: "model-b"}},
-		{"named agent", map[string]string{"PI_SESSION_ID": "run-1", "TUIOS_AGENT_NAME": "worker"}, Actor{Kind: "agent", Harness: "omp", Name: "worker (omp:run-1)"}},
+		{"named agent", map[string]string{"PI_SESSION_ID": "run-1", "MTM_AGENT_NAME": "worker"}, Actor{Kind: "agent", Harness: "omp", Name: "worker (omp:run-1)"}},
 		{"no owner promotion", map[string]string{"PI_SESSION_ID": "run-1", "OCHAZUKE_ACTOR": "owner"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1"}},
-		{"explicit harness scopes run", map[string]string{"TUIOS_HARNESS": "omp", "PI_SESSION_ID": "run-1", "CODEX_THREAD_ID": "inherited"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1"}},
+		{"explicit harness scopes run", map[string]string{"MTM_HARNESS": "omp", "PI_SESSION_ID": "run-1", "CODEX_THREAD_ID": "inherited"}, Actor{Kind: "agent", Harness: "omp", Name: "omp:run-1"}},
 		{"configuration is not detection", map[string]string{"PI_CODING_AGENT_DIR": "/fixture", "OMP_PROFILE": "work"}, Actor{Kind: "owner"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestOMPHistoryAttributionAndUndoIsolation(t *testing.T) {
 	f.lane("add", "Work")
 	actor := func(id string) Actor {
 		a, e := cliActor(func(k string) string {
-			return map[string]string{"PI_SESSION_ID": id, "TUIOS_PANE_ID": "pane", "TUIOS_SESSION": "session"}[k]
+			return map[string]string{"PI_SESSION_ID": id, "MTM_PANE_ID": "pane", "MTM_SESSION": "session"}[k]
 		})
 		if e != nil {
 			t.Fatal(e)

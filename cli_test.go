@@ -212,7 +212,7 @@ func TestCLIActorEnv(t *testing.T) {
 		env           map[string]string
 		kind, harness string
 	}{
-		{map[string]string{}, "owner", ""}, {map[string]string{"TUIOS_PANE_ID": "pane"}, "owner", ""}, {map[string]string{"CODEX_THREAD_ID": "id", "TUIOS_PANE_ID": "pane"}, "agent", "codex"}, {map[string]string{"CLAUDE_CODE_ENTRYPOINT": "cli"}, "agent", "claude-code"}, {map[string]string{"OCHAZUKE_ACTOR": "owner", "AGENT_HARNESS": "codex"}, "agent", "codex"},
+		{map[string]string{}, "owner", ""}, {map[string]string{"MTM_PANE_ID": "pane"}, "owner", ""}, {map[string]string{"CODEX_THREAD_ID": "id", "MTM_PANE_ID": "pane"}, "agent", "codex"}, {map[string]string{"CLAUDE_CODE_ENTRYPOINT": "cli"}, "agent", "claude-code"}, {map[string]string{"OCHAZUKE_ACTOR": "owner", "AGENT_HARNESS": "codex"}, "agent", "codex"},
 	} {
 		a, e := cliActor(func(k string) string { return tc.env[k] })
 		if e != nil || a.Kind != tc.kind || a.Harness != tc.harness {

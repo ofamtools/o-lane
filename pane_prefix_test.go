@@ -26,7 +26,7 @@ func TestPanePrefixAssociation(t *testing.T) {
 				f := newCLI(t)
 				f.lane("add", "Worker")
 				f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
-					if !reflect.DeepEqual(argv, []string{"tuios", "list-windows", "--json", "-s", "remote:s"}) {
+					if !reflect.DeepEqual(argv, []string{"mtm", "list-windows", "--json", "-s", "remote:s"}) {
 						t.Fatalf("lookup %v", argv)
 					}
 					if tc.fail {
@@ -75,7 +75,7 @@ func TestPanePrefixLive(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := Pane{Window: tc.ref, Session: "s"}
 			snapshots := liveSnapshots{{Session: "s"}: {windows: tc.windows, statusTimes: map[string]time.Time{full: at}}}
-			r := newLiveReader(nil, tuiosPaneCommands(), []Pane{p}, snapshots)
+			r := newLiveReader(nil, stubPaneCommands(), []Pane{p}, snapshots)
 			o := liveOptions{on: true, mapping: mapping}
 			got := aggregateLive([]Pane{p}, o, r.current([]Pane{p}))
 			if got.Status != tc.want {
@@ -119,7 +119,7 @@ func TestPanePrefixReaderUniquenessChanges(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := Pane{Window: "prefix-", Session: "s"}
-			r := newLiveReader(nil, tuiosPaneCommands(), []Pane{p}, liveSnapshots{{Session: "s"}: {windows: tc.windows}})
+			r := newLiveReader(nil, stubPaneCommands(), []Pane{p}, liveSnapshots{{Session: "s"}: {windows: tc.windows}})
 			r.apply(tc.event)
 			select {
 			case <-r.changed:

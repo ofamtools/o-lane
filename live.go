@@ -226,7 +226,7 @@ func (s liveSnapshot) windowID(ref string) (string, bool) {
 	return match, match != ""
 }
 
-// Association is still record-first when tuios is unavailable or a ref cannot
+// Association is still record-first when the pane server is unavailable or a ref cannot
 // be resolved. The same bounded snapshot lookup serves live reads and writes.
 func (a *App) resolvePane(p Pane) Pane {
 	if p.Window == "" || p.Session == "" {
@@ -297,7 +297,7 @@ func readScope(parent context.Context, key liveScope, run commandRunner, cmds pa
 	if err != nil {
 		return snap
 	}
-	windows, err := decodeTuiosList[windowStatus](b, "windows")
+	windows, err := decodePaneList[windowStatus](b, "windows")
 	snap.err = err
 	for _, w := range windows {
 		snap.windows[w.Window] = w.Status

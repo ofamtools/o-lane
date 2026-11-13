@@ -11,27 +11,27 @@ import (
 
 func fixture(t *testing.T) string {
 	t.Helper()
-	useTuiosPaneCommands(t)
+	useStubPaneCommands(t)
 	base := t.TempDir()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "MTM_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") || strings.HasPrefix(key, "MTM_") {
+		if strings.HasPrefix(key, "MTM_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") || strings.HasPrefix(key, "MTM_") {
 			t.Setenv(key, "")
 		}
 	}
-	// Every default-runner test also has a fail-closed tuios on PATH. In
+	// Every default-runner test also has a fail-closed mtm on PATH. In
 	// particular, MCP read answers must never reach a real daemon.
 	bin := filepath.Join(base, "bin")
 	if err := os.MkdirAll(bin, 0700); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"tuios", "mtm"} {
+	for _, name := range []string{"mtm"} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf '"+name+" unavailable in fixture\\n' >&2\nexit 1\n"), 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
-	for _, k := range []string{"MTM_SESSION", "TUIOS_SESSION", "MTM_PANE_ID", "TUIOS_PANE_ID", "MTM_HARNESS", "TUIOS_HARNESS", "MTM_AGENT_NAME", "TUIOS_AGENT_NAME", "AGENT_HARNESS", "AGENT_MODEL", "OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "OCHAZUKE_MODEL", "OCHAZUKE_HOST", "OCHAZUKE_EXTENSION", "OCHAZUKE_CALLER", "OCHAZUKE_HOST_DEPTH", "OCHAZUKE_HOST_CHAIN", "O_LANE_ACTOR", "CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"} {
+	for _, k := range []string{"MTM_SESSION", "MTM_PANE_ID", "MTM_HARNESS", "MTM_AGENT_NAME", "AGENT_HARNESS", "AGENT_MODEL", "OCHAZUKE_ACTOR", "OCHAZUKE_HARNESS", "OCHAZUKE_MODEL", "OCHAZUKE_HOST", "OCHAZUKE_EXTENSION", "OCHAZUKE_CALLER", "OCHAZUKE_HOST_DEPTH", "OCHAZUKE_HOST_CHAIN", "O_LANE_ACTOR", "CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"} {
 		t.Setenv(k, "")
 	}
 	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"} {

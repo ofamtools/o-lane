@@ -551,7 +551,7 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 	if e != nil {
 		return nil, e
 	}
-	sessions, e := decodeTuiosList[struct {
+	sessions, e := decodePaneList[struct {
 		Name string `json:"name"`
 		ID   string `json:"id"`
 	}](b, "sessions", "items")
@@ -574,7 +574,7 @@ func (a *App) paneChoices(parent context.Context) ([]ochazuke.Choice, error) {
 		if e != nil {
 			return nil, fmt.Errorf("session %s: %w", name, e)
 		}
-		windows, e := decodeTuiosList[struct {
+		windows, e := decodePaneList[struct {
 			ID      string `json:"window_id"`
 			Name    string `json:"name"`
 			Title   string `json:"title"`

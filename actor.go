@@ -29,7 +29,7 @@ func firstEnv(env func(string) string, keys []string) string {
 }
 
 func detectHarness(env func(string) string) (string, string) {
-	explicit := paneEnv(env, "HARNESS")
+	explicit := env(ochazuke.HostEnvMTM + "HARNESS")
 	if explicit == "" {
 		explicit = firstEnv(env, []string{"AGENT_HARNESS", "OCHAZUKE_HARNESS"})
 	}
@@ -58,7 +58,7 @@ func detectHarness(env func(string) string) (string, string) {
 // explicit override may fill identity fields, never promote a detected agent.
 func cliActor(env func(string) string) (Actor, error) {
 	harness, run := detectHarness(env)
-	a := Actor{Kind: "owner", Name: paneEnv(env, "AGENT_NAME"), Harness: harness, Pane: paneEnv(env, "PANE_ID"), Session: paneEnv(env, "SESSION"), Model: firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"})}
+	a := Actor{Kind: "owner", Name: env(ochazuke.HostEnvMTM + "AGENT_NAME"), Harness: harness, Pane: env(ochazuke.HostEnvMTM + "PANE_ID"), Session: env(ochazuke.HostEnvMTM + "SESSION"), Model: firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"})}
 	detected := a.Harness != ""
 	if detected {
 		a.Kind = "agent"

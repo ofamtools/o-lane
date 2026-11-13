@@ -175,9 +175,9 @@ func TestLiveSnapshotsAndCLI(t *testing.T) {
 			return nil, errors.New("offline")
 		}
 		return []byte(`{"windows":[{"window_id":"w1","agent_state":"working"}]}`), nil
-	}, tuiosPaneCommands())
+	}, stubPaneCommands())
 	sort.Strings(calls)
-	if len(calls) != 3 || calls[1] != "tuios list-windows --json -s remote:s" {
+	if len(calls) != 3 || calls[1] != "mtm list-windows --json -s remote:s" {
 		t.Fatal(calls)
 	}
 	o, _ := f.a.liveOptions()
@@ -200,7 +200,7 @@ func TestLivePageOptOuts(t *testing.T) {
 	if err := a.r.Settings().Set("lanes.status-tone-scope", "cell"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
+	rows, err := loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, stubPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestLivePageOptOuts(t *testing.T) {
 		if err := a.r.Settings().Set("lanes.live-tones", tone); err != nil {
 			t.Fatal(err)
 		}
-		rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
+		rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, stubPaneCommands())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -230,7 +230,7 @@ func TestLivePageOptOuts(t *testing.T) {
 	if _, err := a.store.Status(q.ID, "done", ""); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
+	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, stubPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,8 +240,8 @@ func TestLivePageOptOuts(t *testing.T) {
 	if err := a.r.Settings().Set("lanes.live", false); err != nil {
 		t.Fatal(err)
 	}
-	a.run = func(context.Context, []string) ([]byte, error) { t.Fatal("live off ran tuios"); return nil, nil }
-	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, tuiosPaneCommands())
+	a.run = func(context.Context, []string) ([]byte, error) { t.Fatal("live off ran the pane CLI"); return nil, nil }
+	rows, err = loadLaneRows(context.Background(), a.store, a.pageOptions(), nil, a.run, stubPaneCommands())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,16 +252,16 @@ func TestLivePageOptOuts(t *testing.T) {
 
 // A real executable on PATH exercises the production runner, incremental
 // stdout, gap snapshots, reconnect argv and cancellation, with no daemon.
-func stubTuios(t *testing.T) string {
+func stubPaneCLI(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	for _, file := range []string{"tuios", "subscribe.ndjson", "resume.ndjson"} {
+	for _, file := range []string{"mtm", "subscribe.ndjson", "resume.ndjson"} {
 		data, err := os.ReadFile(filepath.Join("testdata", "live", file))
 		if err != nil {
 			t.Fatal(err)
 		}
 		mode := os.FileMode(0600)
-		if file == "tuios" {
+		if file == "mtm" {
 			mode = 0700
 		}
 		if err = os.WriteFile(filepath.Join(dir, file), data, mode); err != nil {
@@ -292,14 +292,14 @@ func waitLive(t *testing.T, r *liveReader, predicate func(liveSnapshots) bool) {
 }
 func TestLiveReaderRecordedStream(t *testing.T) {
 	a := pageFixture(t)
-	dir := stubTuios(t)
+	dir := stubPaneCLI(t)
 	// Restore the production injectable runner, without changing its contract.
 	production, err := newApp(a.dir, &bytes.Buffer{}, &bytes.Buffer{}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	panes := []Pane{{Session: "s", Window: "w1", Role: "implementer"}, {Session: "s", Window: "w2", Role: "reviewer"}}
-	r := newLiveReader(production.run, tuiosPaneCommands(), panes, liveSnapshots{})
+	r := newLiveReader(production.run, stubPaneCommands(), panes, liveSnapshots{})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); r.Run(ctx) }()
@@ -380,7 +380,7 @@ func TestLiveStreamBufferedRunner(t *testing.T) {
 
 func TestLivePageReaderLifecycle(t *testing.T) {
 	a := pageFixture(t)
-	dir := stubTuios(t)
+	dir := stubPaneCLI(t)
 	production, err := newApp(a.dir, &bytes.Buffer{}, &bytes.Buffer{}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
@@ -461,7 +461,7 @@ func TestLiveReaderBootGap(t *testing.T) {
 		}
 		<-ctx.Done()
 		return nil, ctx.Err()
-	}, tuiosPaneCommands(), panes, liveSnapshots{})
+	}, stubPaneCommands(), panes, liveSnapshots{})
 	done := make(chan struct{})
 	go func() { defer close(done); r.Run(ctx) }()
 	defer func() { cancel(); <-done }()
@@ -479,7 +479,7 @@ func TestLiveReaderScopeIsolation(t *testing.T) {
 	for _, p := range panes {
 		snapshots[scopeOf(p)] = liveSnapshot{windows: map[string]string{"w": "idle"}}
 	}
-	r := newLiveReader(nil, tuiosPaneCommands(), panes, snapshots)
+	r := newLiveReader(nil, stubPaneCommands(), panes, snapshots)
 	r.apply(liveEvent{Type: "agent-state", Host: "remote", Session: "s", Window: "w", Status: "needs_input"})
 	got := r.current(panes)
 	if got[liveScope{Session: "s"}].windows["w"] != "idle" || got[liveScope{Session: "other"}].windows["w"] != "idle" || got[liveScope{Host: "remote", Session: "s"}].windows["w"] != "needs_input" {

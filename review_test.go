@@ -200,14 +200,14 @@ func TestCLIReviewDataPermissions(t *testing.T) {
 	}
 }
 func TestCLIFixtureClearsIdentity(t *testing.T) {
-	for _, k := range []string{"MTM_SESSION", "TUIOS_SESSION", "MTM_PANE_ID", "TUIOS_PANE_ID", "MTM_HARNESS", "TUIOS_HARNESS", "MTM_AGENT_NAME", "TUIOS_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
+	for _, k := range []string{"MTM_SESSION", "MTM_PANE_ID", "MTM_HARNESS", "MTM_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
 		t.Setenv(k, "inherited")
 	}
 	dir := fixture(t)
 	if !strings.HasPrefix(filepath.Clean(dir), filepath.Clean(os.TempDir())+string(os.PathSeparator)) {
 		t.Fatal(dir)
 	}
-	for _, k := range []string{"MTM_SESSION", "TUIOS_SESSION", "MTM_PANE_ID", "TUIOS_PANE_ID", "MTM_HARNESS", "TUIOS_HARNESS", "MTM_AGENT_NAME", "TUIOS_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
+	for _, k := range []string{"MTM_SESSION", "MTM_PANE_ID", "MTM_HARNESS", "MTM_AGENT_NAME", "CLAUDE_CODE_ENTRYPOINT", "CODEX_THREAD_ID", "CLAUDE_SESSION_ID"} {
 		if os.Getenv(k) != "" {
 			t.Fatal("identity inherited", k)
 		}

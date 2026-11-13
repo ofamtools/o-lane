@@ -7,8 +7,8 @@ import (
 )
 
 // Pane CLI lists may be bare arrays or objects containing the array under one
-// of the named fields (tuios: sessions; mtm: items).
-func decodeTuiosList[T any](data []byte, fields ...string) ([]T, error) {
+// of the named fields (sessions or items).
+func decodePaneList[T any](data []byte, fields ...string) ([]T, error) {
 	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("{")) {
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(data, &object); err != nil {

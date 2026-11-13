@@ -14,7 +14,7 @@ import (
 // setup.json declares o-lane's integrations as data for ochazuke's shared
 // setup verbs (o-lane setup status|list|plan|install|uninstall). The Claude
 // Code items add `o-lane agent-hook claude-code` to SubagentStart and
-// SubagentStop beside any existing entries (for example tuios's), and own
+// SubagentStop beside any existing entries (for example mtm's), and own
 // only entries whose first command contains "o-lane agent-hook". The two
 // block items (claude-md, codex-agents) add the "Tracking work (o-lane)"
 // note to the agents' user instructions between o-lane markers, taken from

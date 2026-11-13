@@ -278,7 +278,7 @@ func TestAgentHookPayloads(t *testing.T) {
 	}
 }
 
-const tuiosHooks = `{
+const otherHooks = `{
   "model": "opus",
   "hooks": {
     "SubagentStart": [
@@ -286,7 +286,7 @@ const tuiosHooks = `{
         "hooks": [
           {
             "type": "command",
-            "command": "tuios agent-hook claude-code --integration 3",
+            "command": "mtm agent-hook claude-code --integration 3",
             "timeout": 5
           }
         ]
@@ -297,7 +297,7 @@ const tuiosHooks = `{
         "hooks": [
           {
             "type": "command",
-            "command": "tuios agent-hook claude-code --integration 3",
+            "command": "mtm agent-hook claude-code --integration 3",
             "timeout": 5
           }
         ]
@@ -351,7 +351,7 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(settings, []byte(tuiosHooks), 0600); err != nil {
+	if err := os.WriteFile(settings, []byte(otherHooks), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if out := mustMain(t, dir, "setup", "check", "--home", home); !strings.Contains(out, "claude-subagent-start: missing") || !strings.Contains(out, "claude-subagent-stop: missing") || !strings.Contains(out, "claude-md: missing") || !strings.Contains(out, "codex-agents: missing") {
@@ -365,7 +365,7 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	if !strings.Contains(plan, "write: "+settings) || !strings.Contains(plan, "o-lane agent-hook claude-code") {
 		t.Fatalf("plan: %s", plan)
 	}
-	if b, _ := os.ReadFile(settings); string(b) != tuiosHooks {
+	if b, _ := os.ReadFile(settings); string(b) != otherHooks {
 		t.Fatal("plan changed the file")
 	}
 	// Install needs confirmation; agents cannot give it.
@@ -375,11 +375,11 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	mustMain(t, dir, "setup", "install", "--yes", "--home", home)
 	for _, event := range []string{"SubagentStart", "SubagentStop"} {
 		got := hookCommands(t, settings, event)
-		if len(got) != 2 || got[0] != "tuios agent-hook claude-code --integration 3" || got[1] != "o-lane agent-hook claude-code" {
+		if len(got) != 2 || got[0] != "mtm agent-hook claude-code --integration 3" || got[1] != "o-lane agent-hook claude-code" {
 			t.Fatalf("%s: %q", event, got)
 		}
 	}
-	if b, err := os.ReadFile(settings + ".o-lane.bak"); err != nil || string(b) != tuiosHooks {
+	if b, err := os.ReadFile(settings + ".o-lane.bak"); err != nil || string(b) != otherHooks {
 		t.Fatalf("backup: %v %s", err, b)
 	}
 	first, _ := os.ReadFile(settings)
@@ -392,7 +392,7 @@ func TestSetupClaudeSubagentHook(t *testing.T) {
 	}
 	mustMain(t, dir, "setup", "uninstall", "--yes", "--home", home)
 	for _, event := range []string{"SubagentStart", "SubagentStop"} {
-		if got := hookCommands(t, settings, event); len(got) != 1 || got[0] != "tuios agent-hook claude-code --integration 3" {
+		if got := hookCommands(t, settings, event); len(got) != 1 || got[0] != "mtm agent-hook claude-code --integration 3" {
 			t.Fatalf("uninstall %s: %q", event, got)
 		}
 	}

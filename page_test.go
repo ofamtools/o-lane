@@ -27,7 +27,7 @@ func pageFixture(t *testing.T) *App {
 	t.Helper()
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(key, "TUIOS_") || strings.HasPrefix(key, "MTM_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") {
+		if strings.HasPrefix(key, "MTM_") || strings.HasPrefix(key, "CLAUDE_") || strings.HasPrefix(key, "CODEX_") || strings.HasPrefix(key, "PI_") || strings.HasPrefix(key, "OMP_") {
 			t.Setenv(key, "")
 		}
 	}
@@ -42,9 +42,9 @@ func pageFixture(t *testing.T) *App {
 	a.store.Now = func() time.Time { return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC) }
 	a.run = func(_ context.Context, argv []string) ([]byte, error) {
 		switch strings.Join(argv, " ") {
-		case "tuios list-sessions --json":
+		case "mtm list-sessions --json":
 			return []byte(`[{"name":"fixture-session"}]`), nil
-		case "tuios list-windows --json -s fixture-session":
+		case "mtm list-windows --json -s fixture-session":
 			return []byte(`{"windows":[{"window_id":"fixture-window","name":"Worker","harness":"codex"}]}`), nil
 		case "mtm pane switch --session fixture-session --window fixture-window":
 			return nil, nil
@@ -71,7 +71,7 @@ func seedPage(t *testing.T, a *App, raw json.RawMessage) {
 	if seed.LiveWindows != nil {
 		run := a.run
 		a.run = func(ctx context.Context, argv []string) ([]byte, error) {
-			if reflect.DeepEqual(argv, []string{"tuios", "list-windows", "--json", "-s", "fixture-session"}) {
+			if reflect.DeepEqual(argv, []string{"mtm", "list-windows", "--json", "-s", "fixture-session"}) {
 				return json.Marshal(seed.LiveWindows)
 			}
 			return run(ctx, argv)
@@ -110,7 +110,7 @@ func TestLaneStories(t *testing.T) {
 				a = pageFixture(t)
 				seedPage(t, a, env.Seed)
 				if strings.HasPrefix(env.Story.Name, "lanes/live-") {
-					stubTuios(t)
+					stubPaneCLI(t)
 					t.Setenv("LANE_STUB_STORY", "1")
 					production, err := newApp(a.dir, &bytes.Buffer{}, &bytes.Buffer{}, &bytes.Buffer{})
 					if err != nil {
@@ -154,7 +154,7 @@ func TestLaneStories(t *testing.T) {
 			}
 			if story.Name == "lanes/live-off" {
 				if data, err := os.ReadFile(filepath.Join(os.Getenv("LANE_STUB_DIR"), "calls")); err == nil {
-					t.Fatalf("live off ran tuios: %s", data)
+					t.Fatalf("live off ran the pane CLI: %s", data)
 				}
 			}
 			if strings.HasSuffix(story.Name, "status-change") {
@@ -654,15 +654,17 @@ func TestPageStatusDescriptions(t *testing.T) {
 	}
 }
 
-// tuios exits 3 with an empty list when no server runs: that is an empty
+// A pane CLI that exits with its no-server status (noServerStatus) and an
+// empty list when no server runs: that is an empty
 // choice list with a plain explanation, not a failed job. Any other exit
 // status stays an error, now saying which command failed and why.
 func TestPagePaneChoicesNoServer(t *testing.T) {
+	withNoServerStatus(t, "mtm", 3)
 	a := pageFixture(t)
 	var stderr bytes.Buffer
 	a.errOut = &stderr
 	exit := func(status int, msg string) error {
-		return &commandError{argv: []string{"tuios", "list-sessions", "--json"}, status: status, stderr: msg, err: errors.New("exit status")}
+		return &commandError{argv: []string{"mtm", "list-sessions", "--json"}, status: status, stderr: msg, err: errors.New("exit status")}
 	}
 	a.run = func(context.Context, []string) ([]byte, error) { return []byte("[]\n"), exit(3, "") }
 	choices, e := a.paneChoices(context.Background())
@@ -674,9 +676,18 @@ func TestPagePaneChoicesNoServer(t *testing.T) {
 	}
 	a.run = func(context.Context, []string) ([]byte, error) { return nil, exit(1, "boom") }
 	_, e = a.paneChoices(context.Background())
-	if e == nil || e.Error() != "tuios list-sessions --json failed (exit 1): boom" {
+	if e == nil || e.Error() != "mtm list-sessions --json failed (exit 1): boom" {
 		t.Fatalf("other failure: %v", e)
 	}
+}
+
+// withNoServerStatus adds one noServerStatus row for the test: the rows are
+// data, and none ships for mtm.
+func withNoServerStatus(t *testing.T, program string, status int) {
+	t.Helper()
+	old := noServerStatus
+	noServerStatus = map[string]int{program: status}
+	t.Cleanup(func() { noServerStatus = old })
 }
 
 // The default runner reports a real nonzero exit as a commandError with the
@@ -696,14 +707,15 @@ func TestRunnerExitStatus(t *testing.T) {
 	}
 }
 
-// A tuios that exits 3 with "[]" and nothing on stderr (what a machine
+// A pane CLI that exits 3 with "[]" and nothing on stderr (what a machine
 // without a running server does, reproduced with the real binary in a
 // temporary HOME) gives an empty choice list through the default runner.
 func TestPagePaneChoicesNoServerProcess(t *testing.T) {
-	useTuiosPaneCommands(t)
+	withNoServerStatus(t, "mtm", 3)
+	useStubPaneCommands(t)
 	bin := t.TempDir()
 	script := "#!/bin/sh\necho '[]'\nexit 3\n"
-	if e := os.WriteFile(filepath.Join(bin, "tuios"), []byte(script), 0o755); e != nil {
+	if e := os.WriteFile(filepath.Join(bin, "mtm"), []byte(script), 0o755); e != nil {
 		t.Fatal(e)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))

@@ -18,7 +18,7 @@ import (
 )
 
 // Agent participants are lanes' relations to a harness's sub-agent (a Claude
-// Code subagent, later Codex or omp ones) rather than to a tuios pane. Their
+// Code subagent, later Codex or omp ones) rather than to an mtm pane. Their
 // live status is derived from data only: lanes.agent-harnesses rows say where a
 // harness writes an agent's transcript, which line field holds its time and
 // which hook events start and stop it. Nothing here branches on a harness name.

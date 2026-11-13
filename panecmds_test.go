@@ -2,20 +2,20 @@ package main
 
 import "testing"
 
-// tuiosPaneCommands are the settings that keep the older pane CLI working.
+// stubPaneCommands are the settings that keep the older pane CLI working.
 // The existing live tests drive a fake of it; fixture installs them.
-func tuiosPaneCommands() paneCommands {
+func stubPaneCommands() paneCommands {
 	return paneCommands{
-		Sessions: []string{"tuios", "list-sessions", "--json"},
-		Panes:    []string{"tuios", "list-windows", "--json", "-s", "{session}"},
-		Events:   []string{"tuios", "subscribe", "--types", "agent-state,window-closed", "--hosts"},
+		Sessions: []string{"mtm", "list-sessions", "--json"},
+		Panes:    []string{"mtm", "list-windows", "--json", "-s", "{session}"},
+		Events:   []string{"mtm", "subscribe", "--types", "agent-state,window-closed", "--hosts"},
 		Resume:   []string{"--after-seq", "{after-seq}", "--boot-id", "{boot-id}"},
 	}
 }
 
-func useTuiosPaneCommands(t *testing.T) {
+func useStubPaneCommands(t *testing.T) {
 	t.Helper()
 	old := builtinPaneCommands
-	builtinPaneCommands = tuiosPaneCommands()
+	builtinPaneCommands = stubPaneCommands()
 	t.Cleanup(func() { builtinPaneCommands = old })
 }
