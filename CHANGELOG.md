@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Changed: live status reads one session per `mtm session list-panes` call, now run concurrently (4 at a time) instead of one after another, and once per host/session per read. A list over 6 sessions waits for about two process starts, not six. A failed or slow session still leaves only its own panes `unknown` (3 s limit each). A mounted o-lane still execs the host command, as `mtm` offers no in-process call; `mtm pane list` is not used because it carries no state time.
+
 ## v0.8.0 (2026-11-13)
 
 - Fixed: every read took seconds on a store of about a thousand lanes (one status change cost about 28 s of CPU across the reads that follow it). The lane subtree and pane-holder walk was cubic; it is now one pass over a parent-to-children map and a pane list built once per read. The root rolled status and the built-in status rows are computed once per read, not per row. Output is unchanged (`TestPaneTreeMatchesWalk`).
