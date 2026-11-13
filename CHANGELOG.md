@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 (2026-11-13)
 
 - Fixed: every read took seconds on a store of about a thousand lanes (one status change cost about 28 s of CPU across the reads that follow it). The lane subtree and pane-holder walk was cubic; it is now one pass over a parent-to-children map and a pane list built once per read. The root rolled status and the built-in status rows are computed once per read, not per row. Output is unchanged (`TestPaneTreeMatchesWalk`).
 - Changed: reads never call the host for projects. A list, rows, tree, page or get shows the stored project id with the name kept on the lane (`project_label`); the host is asked only to resolve a typed reference on a write and for a `--project` filter that matches no stored id or name. The Lanes page no longer waits up to 1 s for project names. A renamed project shows its old name until a write touches the lane.
