@@ -1,0 +1,37 @@
+// o-lane's default key rows from the run-3 key picker (ochazuke bindings, JSONC), all hidden; the rows bound in Go (page.go) stay there. A user's bindings.json overrides them.
+{
+  "bindings": [
+    {"context": "lane/normal", "bindings": [
+      {"key": "c", "action": "lane.add", "hidden": true},
+      {"key": "B", "action": "lane.associate", "hidden": true},
+      {"key": "U", "action": "lane.cancel", "hidden": true},
+      {"key": "e", "action": "lane.create", "hidden": true},
+      {"key": "m", "action": "lane.define", "hidden": true},
+      {"key": "g d", "action": "lane.duplicate", "hidden": true},
+      {"key": "r", "action": "lane.edit", "hidden": true},
+      {"key": "t", "action": "lane.finish", "hidden": true},
+      {"key": "H", "action": "lane.follow", "hidden": true},
+      {"key": "M", "action": "lane.get", "hidden": true},
+      {"key": "w", "action": "lane.history", "hidden": true},
+      {"key": "x", "action": "lane.link", "hidden": true},
+      {"key": "A", "action": "lane.list", "hidden": true},
+      {"key": "C", "action": "lane.live", "hidden": true},
+      {"key": "D", "action": "lane.merge", "hidden": true},
+      {"key": "[", "action": "lane.move", "hidden": true},
+      {"key": "E", "action": "lane.page-rows", "hidden": true},
+      {"key": "R", "action": "lane.park", "hidden": true},
+      {"key": "ctrl+s", "action": "lane.rename", "hidden": true},
+      {"key": "ctrl+v", "action": "lane.reopen", "hidden": true},
+      {"key": "ctrl+z", "action": "lane.reword", "hidden": true},
+      {"key": "alt+j", "action": "lane.rows", "hidden": true},
+      {"key": "*", "action": "lane.set", "hidden": true},
+      {"key": "alt+m", "action": "lane.start", "hidden": true},
+      {"key": "g a", "action": "lane.tag", "hidden": true},
+      {"key": "g b", "action": "lane.tree", "hidden": true},
+      {"key": "d u", "action": "lane.unassociate", "hidden": true},
+      {"key": "g e", "action": "lane.undo", "hidden": true},
+      {"key": "g f", "action": "lane.unlink", "hidden": true},
+      {"key": "g j", "action": "lane.yank-path", "hidden": true}
+    ]}
+  ]
+}

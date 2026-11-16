@@ -137,6 +137,9 @@ func newApp(dir string, in io.Reader, out, errOut io.Writer) (*App, error) {
 	if e = a.registerPage(); e != nil {
 		return nil, e
 	}
+	if e = a.loadDefaultBindings(); e != nil {
+		return nil, e
+	}
 	if e = a.declareSetup(); e != nil {
 		return nil, e
 	}
