@@ -145,7 +145,7 @@ func TestArchiveWithoutStatusRow(t *testing.T) {
 	f.lane("add", "Plain")
 	f.fail("archive:true", "lane", "set", "Plain", "archived=true")
 	f.fail("lanes.status-presets", "lane", "archive", "Plain")
-	f.fail("must be one of", "lane", "set", "Plain", "status", "archived")
+	f.fail(`unknown status "archived"`, "lane", "set", "Plain", "status", "archived")
 	f.call("lane", "set", "Plain", "archived=false") // not archived: nothing to do
 	if got := listed(t, f, "name", "lane", "list"); got != "Plain" {
 		t.Fatal(got)

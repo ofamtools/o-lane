@@ -179,7 +179,7 @@ func TestCLIStatusAsData(t *testing.T) {
 	if v["started"] == nil || v["finished"] == nil {
 		t.Fatal(v)
 	}
-	f.fail("must be one of", "lane", "set", "custom", "status", "bogus")
+	f.fail(`unknown status "bogus"`, "lane", "set", "custom", "status", "bogus")
 }
 func TestCLIRightsAndActors(t *testing.T) {
 	f := newCLI(t)

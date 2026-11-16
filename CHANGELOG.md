@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Deps: ochazuke v0.144.0 (from v0.135.0). The family word list copy gains ochazuke's new words (`add-key`, `binding-file`, `capture-*`, `cycle-mode`, `drop`, `edit-fields`, `explain`, `explain-key`, `help-node`, `help-page`, `help-page-state`, `help-row`, `jump`, `narrow`, `overlay`, `rebind`, `redirect`, `refocus`, `show-file`, `unify`); the namecheck baseline drops two `"reason"` rows (`statusReason`, `Store.patch`): `reason` is no longer a name the runtime declares. An unknown `status` is now refused by o-lane's own check (`unknown status "X"; configure lanes.statuses to add it`) instead of ochazuke's `must be one of` (gone since ochazuke v0.142.0); two tests follow the wording. `serve` stays undeclared: v0.144.0 still has no per-call actor hook (`Shell.Run` uses `Shell.Actor`, which this tool sets once per process).
+
 ## v0.10.0
 
 - Fixed (SC-071): `lane define` dropped `status` without a word. It now takes every lifecycle prop `lane set` takes (`status`, `reason`, `archived`, through the same patch) beside the spec fields, and names any other key in a notice with did-you-mean (`unknown key "stauts" was not saved (did you mean "status"?)`); the rest of the row is kept.
