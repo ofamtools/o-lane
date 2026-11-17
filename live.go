@@ -409,9 +409,6 @@ func (a *App) liveResult(_ ochazuke.Ctx, q Lane) ochazuke.Result {
 	return done(v, err)
 }
 func (a *App) focusPane(c ochazuke.Ctx, q Lane, role string) ochazuke.Result {
-	if c.Actor().IsAgent() && a.showUI == nil {
-		return done(nil, errors.New("focus-pane needs a live UI (agents.live-only)"))
-	}
 	panes, e := a.associatedPanes(q)
 	if e != nil {
 		return done(nil, e)

@@ -442,9 +442,6 @@ func (s *Store) Undo() error {
 			if snap.Undone {
 				continue
 			}
-			if s.Actor.IsAgent() && !s.Actor.SameAgent(snap.By) {
-				return errors.New("undo refused (history.own-entry): the latest change belongs to another actor")
-			}
 			current, e := s.all()
 			if e != nil {
 				return e

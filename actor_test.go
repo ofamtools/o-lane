@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -63,10 +62,6 @@ func TestOMPHistoryAttributionAndUndoIsolation(t *testing.T) {
 		t.Fatalf("history actor %+v, want %+v", got, a)
 	}
 	f.a.store.Actor = actor("b")
-	if e := f.a.store.Undo(); e == nil || !strings.Contains(e.Error(), "history.own-entry") {
-		t.Fatal("another omp run undid the change", e)
-	}
-	f.a.store.Actor = a
 	if e := f.a.store.Undo(); e != nil {
 		t.Fatal(e)
 	}

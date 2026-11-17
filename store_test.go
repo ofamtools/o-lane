@@ -206,15 +206,18 @@ func TestStoreDefineAtomicAndIdempotent(t *testing.T) {
 func TestStoreAgentUndo(t *testing.T) {
 	s := testStore(t)
 	q := mustAdd(t, s, Spec{Name: "owned"})
+	if _, e := s.Annotate(q.ID, "owner's"); e != nil {
+		t.Fatal(e)
+	}
 	s.Actor = Actor{Kind: "agent", Name: "worker", Harness: "test", Pane: "w", Session: "s"}
+	if e := s.Undo(); e != nil {
+		t.Fatalf("agent undo of owner change: %v", e)
+	}
 	if _, e := s.Annotate(q.ID, "mine"); e != nil {
 		t.Fatal(e)
 	}
 	if e := s.Undo(); e != nil {
 		t.Fatal(e)
-	}
-	if e := s.Undo(); e == nil || !strings.Contains(e.Error(), "history.own-entry") {
-		t.Fatalf("undo crossed owner: %v", e)
 	}
 	if e := s.permit("delete"); e == nil {
 		t.Fatal("agent delete succeeded")
