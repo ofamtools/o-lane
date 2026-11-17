@@ -1,9 +1,12 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -360,5 +363,72 @@ func TestHistoryPruneFailureKeepsChange(t *testing.T) {
 	}
 	if got := mustResolve(t, s, q.ID); len(got.History) == 0 || len(warned) == 0 {
 		t.Fatal(got.History, warned)
+	}
+}
+func TestStoreBackupAgeAndNoHistory(t *testing.T) {
+	for _, days := range []int{14, 0} {
+		s := testStore(t)
+		s.BackupDaily = true
+		s.BackupDays = days
+		at := time.Date(2026, 1, 30, 0, 0, 0, 0, time.UTC)
+		s.Now = func() time.Time { return at }
+		dir := filepath.Join(s.Dir, "backups")
+		if e := os.MkdirAll(dir, 0700); e != nil {
+			t.Fatal(e)
+		}
+		for _, n := range []string{"2026-01-01", "2026-01-20"} {
+			if e := os.WriteFile(filepath.Join(dir, n+".tar.gz"), []byte("x"), 0600); e != nil {
+				t.Fatal(e)
+			}
+		}
+		q := mustAdd(t, s, Spec{Name: "age"})
+		_, _ = s.Annotate(q.ID, "entry")
+		files, _ := filepath.Glob(filepath.Join(dir, "*.tar.gz"))
+		want := 3
+		if days == 14 {
+			want = 2
+		}
+		if len(files) != want {
+			t.Fatal(days, files)
+		}
+		if days == 14 {
+			if _, e := os.Stat(filepath.Join(dir, "2026-01-01.tar.gz")); e == nil {
+				t.Fatal("old daily kept")
+			}
+			if path, e := s.backup(dir, false); e != nil {
+				t.Fatal(e)
+			} else if names := archiveNames(t, path); len(names) == 0 {
+				t.Fatal("empty archive")
+			} else {
+				for _, n := range names {
+					if strings.HasPrefix(n, ".history/") {
+						t.Fatal("history member", n)
+					}
+				}
+			}
+		}
+	}
+}
+func archiveNames(t *testing.T, path string) []string {
+	f, e := os.Open(path)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer f.Close()
+	gz, e := gzip.NewReader(f)
+	if e != nil {
+		t.Fatal(e)
+	}
+	tr := tar.NewReader(gz)
+	var out []string
+	for {
+		h, e := tr.Next()
+		if e == io.EOF {
+			return out
+		}
+		if e != nil {
+			t.Fatal(e)
+		}
+		out = append(out, h.Name)
 	}
 }

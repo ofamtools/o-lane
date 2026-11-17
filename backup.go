@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-// Daily backups adapt o-questions: only root trees and undo history enter
-// private archives. Retention uses the injectable file-removal function.
+// Daily backups adapt o-questions: only root trees enter private archives
+// (never the undo history). Retention uses the injectable file-removal function.
 func (s *Store) backup(to string, daily bool) (string, error) {
 	if e := os.MkdirAll(to, 0700); e != nil {
 		return "", e
@@ -34,7 +34,7 @@ func (s *Store) backup(to string, daily bool) (string, error) {
 	}
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
-	for _, root := range []string{"roots", ".history"} {
+	for _, root := range []string{"roots"} {
 		e = filepath.WalkDir(filepath.Join(s.Dir, root), func(p string, d os.DirEntry, e error) error {
 			if errors.Is(e, os.ErrNotExist) {
 				return nil
@@ -82,6 +82,7 @@ func (s *Store) backup(to string, daily bool) (string, error) {
 	}
 	if daily {
 		s.retain(to, "????-??-??.tar.gz", s.BackupKeep)
+		s.retainDays(to, "????-??-??.tar.gz", s.BackupDays)
 	}
 	return path, nil
 }
@@ -100,6 +101,27 @@ func (s *Store) retain(dir, pattern string, keep int) {
 		return
 	}
 	for len(files) > keep {
+		if e = s.remove(files[0]); e != nil && !errors.Is(e, os.ErrNotExist) {
+			s.warnRetain(dir, e)
+			return
+		}
+		files = files[1:]
+	}
+}
+
+// retainDays removes dailies whose date (from the name) is more than days
+// before today, never the newest one. days 0 turns the rule off.
+func (s *Store) retainDays(dir, pattern string, days int) {
+	if days <= 0 {
+		return
+	}
+	files, e := filepath.Glob(filepath.Join(dir, pattern))
+	if e != nil {
+		s.warnRetain(dir, e)
+		return
+	}
+	cutoff := s.now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
+	for len(files) > 1 && strings.TrimSuffix(filepath.Base(files[0]), ".tar.gz") < cutoff {
 		if e = s.remove(files[0]); e != nil && !errors.Is(e, os.ErrNotExist) {
 			s.warnRetain(dir, e)
 			return

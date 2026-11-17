@@ -203,6 +203,7 @@ func (a *App) configure() error {
 	a.store.RestorePresets = cfg.Strings("lanes.restore-presets")
 	a.store.BackupDaily = cfg.Bool("backup.daily")
 	a.store.BackupKeep = cfg.Int("backup.keep")
+	a.store.BackupDays = cfg.Int("retention.backups.days")
 	a.store.HistoryKeep = cfg.Int("history.keep")
 	a.store.PanesShared = !cfg.Bool("lanes.pane-one-lane")
 	a.linkProjects()

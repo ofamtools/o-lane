@@ -87,6 +87,12 @@ func appSettings() []ochazuke.Setting {
 		{Name: "lanes.agent-idle", Type: ochazuke.SettingDuration, Default: 3 * time.Minute, Description: "An associated agent with no transcript activity for this long is idle; zero never idles"},
 		{Name: "backup.daily", Type: ochazuke.SettingBoolean, Default: true, Description: "Private daily backup before first mutation"},
 		{Name: "backup.keep", Type: ochazuke.SettingInteger, Default: 14, Description: "Daily archives to retain"},
+		{Name: "retention.backups.days", Type: ochazuke.SettingInteger, Default: 14, Validate: func(v any) error {
+			if n, ok := v.(int); !ok || n < 0 {
+				return fmt.Errorf("retention.backups.days: use 0 (no age limit) or a number of days")
+			}
+			return nil
+		}, Description: "Daily archives older than this many days are removed, never the newest; 0 turns the age rule off"},
 		{Name: "history.keep", Type: ochazuke.SettingInteger, Default: 200, Validate: func(v any) error {
 			if n, ok := v.(int); ok && n < 0 {
 				return fmt.Errorf("history.keep: use 0 (keep everything) or a count")

@@ -34,6 +34,7 @@ type Store struct {
 	Notice      func(string)
 	BackupDaily bool
 	BackupKeep  int
+	BackupDays  int
 	HistoryKeep int // undo entries retained; 0 keeps all
 	// PanesShared lets one pane belong to several lanes at once
 	// (lanes.pane-one-lane=false). By default a pane belongs to one lane.
