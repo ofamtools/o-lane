@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,12 +15,22 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	ocli "ofam.dev/ochazuke/cli"
 	"ofam.dev/ochazuke/config"
+	"ofam.dev/ochazuke/core"
 	"ofam.dev/ochazuke/ui"
 	"ofam.dev/ochazuke/widgets/table"
+	"ofam.dev/oden"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
+
+func progName() string {
+	if parent := os.Getenv("ODEN_PARENT"); parent != "" {
+		return parent + " lane"
+	}
+	return "o-lane"
+}
 
 func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	argv, dataFlag, err := splitDataArgs(argv)
@@ -27,25 +38,18 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "o-lane:", err)
 		return 2
 	}
-	if len(argv) > 0 {
-		switch argv[0] {
-		case "-h", "--help", "help":
-			fmt.Fprintln(stdout, usageText())
-			return 0
-		case "--version", "-version", "version":
-			fmt.Fprintf(stdout, "o-lane %s\n", Version)
-			return 0
-		case "--smoke":
-			return runSmoke(stdout, stderr)
-		}
-		cfg, set := loadConfig(configDir())
-		_ = cfg
+	app := newOdenApp(argv, dataFlag, stdin, stdout, stderr)
+	return oden.Report(stderr, progName(), app.Run(context.Background()))
+}
+
+func newOdenApp(argv []string, dataFlag string, stdin io.Reader, stdout, stderr io.Writer) *oden.App {
+	openCLI := func() (*cli, error) {
+		_, set := loadConfig(configDir())
 		st, err := openStore(dataFlag, set, stderr)
 		if err != nil {
-			fmt.Fprintln(stderr, "o-lane:", err)
-			return 1
+			return nil, err
 		}
-		c := &cli{
+		return &cli{
 			st:          st,
 			plansDir:    set.String("lanes.plans-dir", ""),
 			importCols:  set.String("lanes.import-columns", defaultImportColumns),
@@ -53,31 +57,139 @@ func run(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			stdin:       stdin,
 			stdout:      stdout,
 			stderr:      stderr,
-		}
-		if err := c.dispatch(argv); err != nil {
-			if errors.Is(err, errUsage) {
-				fmt.Fprintln(stderr, usageText())
-				return 2
-			}
-			fmt.Fprintf(stderr, "o-lane %s: %v\n", argv[0], err)
-			return 1
-		}
-		return 0
+		}, nil
 	}
 
-	cfg, set := loadConfig(configDir())
-	st, err := openStore(dataFlag, set, stderr)
-	if err != nil {
-		fmt.Fprintln(stderr, "o-lane:", err)
-		return 1
+	exportConfig := func(jsonl bool) ([]byte, error) {
+		dir, _ := dataDir(dataFlag)
+		cfg := map[string]any{
+			"name":     "o-lane",
+			"version":  Version,
+			"config":   configDir(),
+			"data":     dir,
+			"settings": defaultSettings,
+		}
+		if jsonl {
+			var b strings.Builder
+			for _, k := range []string{"name", "version", "config", "data", "settings"} {
+				line, err := json.Marshal(map[string]any{"key": k, "value": cfg[k]})
+				if err != nil {
+					return nil, err
+				}
+				b.Write(line)
+				b.WriteByte('\n')
+			}
+			return []byte(b.String()), nil
+		}
+		return json.MarshalIndent(cfg, "", "  ")
 	}
-	env := newEnv(st, cfg)
-	sh := newShell(env)
-	if _, err := tea.NewProgram(sh).Run(); err != nil {
-		fmt.Fprintln(stderr, "o-lane:", err)
-		return 1
+
+	info := ocli.AppInfo{
+		Name:         "o-lane",
+		Version:      Version,
+		Summary:      "Work lane and plan tracker",
+		Modes:        func() []core.Mode { return modes },
+		Bindings:     func() []core.Binding { return defaultBindings() },
+		Specs:        func() []core.CommandSpec { return commandSpecs() },
+		ExportConfig: exportConfig,
+		RunTUI: func(_ context.Context, _ []string) error {
+			cfg, set := loadConfig(configDir())
+			st, err := openStore(dataFlag, set, stderr)
+			if err != nil {
+				return err
+			}
+			env := newEnv(st, cfg)
+			sh := newShell(env)
+			_, err = tea.NewProgram(sh).Run()
+			return err
+		},
+		RunSmoke: func(out io.Writer, _ bool) error {
+			if code := runSmoke(out, stderr); code != 0 {
+				return &oden.ExitError{Code: code}
+			}
+			return nil
+		},
+		Manifest: extManifest(),
+		Capabilities: &oden.Capabilities{
+			Name:         "o-lane",
+			Version:      Version,
+			Summary:      "Work lane and plan tracker",
+			Capabilities: []string{"query", "catalog", "tui"},
+		},
+		Query: func(_ context.Context, kind string, args []string) (oden.ExtQueryResult, error) {
+			c, err := openCLI()
+			if err != nil {
+				return oden.ExtQueryResult{}, err
+			}
+			return extQueryStore(c.st, kind, args)
+		},
 	}
-	return 0
+
+	app := ocli.NewApp(info, argv, oden.WithStdio(stdin, stdout, stderr))
+
+	laneChild := func(name string, aliases []string, summary, usage string, fn func(*cli, []string) error) oden.Command {
+		return oden.Command{
+			Name:    name,
+			Aliases: aliases,
+			Summary: summary,
+			Usage:   usage,
+			Run: func(_ context.Context, args []string) error {
+				c, err := openCLI()
+				if err != nil {
+					return err
+				}
+				return fn(c, args)
+			},
+		}
+	}
+
+	app.Add(
+		oden.Command{
+			Name:    "lane",
+			Summary: "define, inspect, and update work lanes",
+			Children: []oden.Command{
+				laneChild("define", []string{"add"}, "define one or more lanes", "[NAME] [--parent P] [--project P] [--plan FILE] [--lanes JSON|-] [--dry-run]", func(c *cli, args []string) error { return c.laneDefine(args) }),
+				laneChild("list", []string{"ls"}, "list lanes with optional filters", "[--status S] [--project P] [--archived] [--format table|json]", func(c *cli, args []string) error { return c.laneList(args) }),
+				laneChild("show", nil, "show full details, rollup, and history for a lane", "ID [--json]", func(c *cli, args []string) error { return c.laneShow(args) }),
+				laneChild("state", []string{"status"}, "set a lane's lifecycle status", "ID STATUS [--note TEXT]", func(c *cli, args []string) error { return c.laneState(args) }),
+				laneChild("note", []string{"annotate"}, "append a note to a lane's history", "ID TEXT", func(c *cli, args []string) error { return c.laneNote(args) }),
+				laneChild("associate", nil, "associate a project, pane, or agent with a lane", "ID [--project REF] [--pane WIN] [--session S] [--host H] [--role R] [--remove]", func(c *cli, args []string) error { return c.laneAssociate(args, false) }),
+				laneChild("unassociate", nil, "remove a project, pane, or agent association", "ID [--project REF] [--pane WIN]", func(c *cli, args []string) error { return c.laneAssociate(args, true) }),
+				laneChild("archive", nil, "archive a lane or finished trees", "[ID] [--finished-trees] [--restore] [--dry-run] [--note TEXT]", func(c *cli, args []string) error { return c.laneArchive(args, false) }),
+				laneChild("restore", nil, "restore an archived lane", "ID [--note TEXT]", func(c *cli, args []string) error { return c.laneArchive(args, true) }),
+				laneChild("undo", nil, "undo the most recent store mutation", "", func(c *cli, args []string) error { return c.cmdLane(append([]string{"undo"}, args...)) }),
+				laneChild("redo", nil, "redo the most recently undone mutation", "", func(c *cli, args []string) error { return c.cmdLane(append([]string{"redo"}, args...)) }),
+				laneChild("rename", nil, "rename a lane", "ID NEW_NAME", func(c *cli, args []string) error { return c.cmdLane(append([]string{"rename"}, args...)) }),
+				laneChild("reword", nil, "update a lane's owner wording", "ID TEXT", func(c *cli, args []string) error { return c.cmdLane(append([]string{"reword"}, args...)) }),
+				laneChild("move", nil, "reparent a lane", "ID [PARENT]", func(c *cli, args []string) error { return c.cmdLane(append([]string{"move"}, args...)) }),
+				laneChild("delete", nil, "delete a lane", "ID", func(c *cli, args []string) error { return c.cmdLane(append([]string{"delete"}, args...)) }),
+			},
+		},
+		oden.Command{
+			Name:    "plan",
+			Summary: "import and inspect Markdown plans",
+			Children: []oden.Command{
+				laneChild("define", nil, "import a Markdown plan's Lanes table", "FILE [--name NAME] [--project REF] [--wording TEXT] [--dry-run]", func(c *cli, args []string) error { return c.cmdPlan(append([]string{"define"}, args...)) }),
+				laneChild("list", []string{"ls"}, "list plans referenced in the store", "[--format table|json]", func(c *cli, args []string) error { return c.cmdPlan(append([]string{"list"}, args...)) }),
+				laneChild("show", nil, "show a plan's summary and constituent lanes", "PLAN [--json]", func(c *cli, args []string) error { return c.cmdPlan(append([]string{"show"}, args...)) }),
+			},
+		},
+		oden.Command{
+			Name:    "rollup",
+			Summary: "show subtree rollup counts and rolled statuses",
+			Usage:   "[ID] [--project REF] [--format table|json]",
+			Run: func(_ context.Context, args []string) error {
+				c, err := openCLI()
+				if err != nil {
+					return err
+				}
+				return c.cmdRollup(args)
+			},
+		},
+	)
+
+	app.HelpText = usageText()
+	return app
 }
 
 func dataDir(flagVal string) (string, error) {
