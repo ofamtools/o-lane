@@ -54,6 +54,7 @@ type UndoChange struct {
 type Snapshot struct {
 	Changes []UndoChange `json:"changes,omitempty"`
 	Rows    []Lane       `json:"rows"`
+	After   []Lane       `json:"after,omitempty"`
 	At      time.Time    `json:"at"`
 	Action  string       `json:"action"`
 	By      Actor        `json:"by"`
@@ -364,7 +365,7 @@ func (s *Store) commit(before, after []Lane, action string) error {
 		}
 		next = n + 1
 	}
-	b, e := json.Marshal(Snapshot{Rows: before, At: s.now(), Action: action, By: s.Actor, Changes: changedLanes(before, after)})
+	b, e := json.Marshal(Snapshot{Rows: before, After: after, At: s.now(), Action: action, By: s.Actor, Changes: changedLanes(before, after)})
 	if e != nil {
 		return e
 	}
@@ -459,6 +460,50 @@ func (s *Store) Undo() error {
 			return s.write(restored, map[string]json.RawMessage{".history/" + filepath.Base(files[i]): b})
 		}
 		return nothingToUndo(files, s.HistoryKeep)
+	})
+}
+
+// Redo re-applies the earliest undone snapshot at the tail of the undo history.
+func (s *Store) Redo() error {
+	if e := s.permit("redo"); e != nil {
+		return e
+	}
+	return s.locked(func() error {
+		files, e := s.historyFiles()
+		if e != nil {
+			return e
+		}
+		target := -1
+		var snap Snapshot
+		for i := len(files) - 1; i >= 0; i-- {
+			b, e := os.ReadFile(files[i])
+			if e != nil {
+				return e
+			}
+			var cand Snapshot
+			if b, e = migrateLegacy(b); e != nil {
+				return e
+			}
+			if e = json.Unmarshal(b, &cand); e != nil {
+				return e
+			}
+			if !cand.Undone {
+				break
+			}
+			if len(cand.After) > 0 {
+				target = i
+				snap = cand
+			}
+		}
+		if target < 0 {
+			return errors.New("nothing to redo")
+		}
+		snap.Undone = false
+		b, e := json.Marshal(snap)
+		if e != nil {
+			return e
+		}
+		return s.write(snap.After, map[string]json.RawMessage{".history/" + filepath.Base(files[target]): b})
 	})
 }
 

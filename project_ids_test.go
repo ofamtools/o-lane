@@ -1,24 +1,16 @@
 package main
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 )
 
-const hostProjectsJSON = `{"items":[{"id":"1","name":"Alpha"},{"id":"2","name":"Beta"},{"id":"3","name":"Dup"},{"id":"4","name":"dup"}]}`
-
-func withHostProjects(f *cliFixture) {
-	f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
-		if strings.Join(argv, " ") != "mtm project list" {
-			return nil, os.ErrNotExist
-		}
-		return []byte(hostProjectsJSON), nil
-	}
-	f.a.projectsAt = f.a.projectsAt.Add(-1 << 40) // forget a cached list
+var testHostProjects = []hostProject{
+	{ID: "1", Name: "Alpha"},
+	{ID: "2", Name: "Beta"},
+	{ID: "3", Name: "Dup"},
+	{ID: "4", Name: "dup"},
 }
 
 func rootBytes(t *testing.T, dir string) map[string]string {
@@ -38,40 +30,43 @@ func rootBytes(t *testing.T, dir string) map[string]string {
 // The migration rewrites what names exactly one project, keeps the name,
 // leaves every other row byte for byte, and a second run does nothing.
 func TestProjectResolveMigration(t *testing.T) {
-	f := newCLI(t)
-	// Stored before the host's projects were known: as typed.
+	st := testStore(t)
+	st.BackupDaily = false
 	for _, row := range [][2]string{{"a", "alpha"}, {"b", "mtm:2"}, {"c", "1"}, {"d", "ghost"}, {"e", "DUP"}, {"f", ""}} {
-		args := []string{"lane", "add", row[0]}
-		if row[1] != "" {
-			args = append(args, "--project", row[1])
-		}
-		f.call(args...)
+		mustAdd(t, st, Spec{Name: row[0], Project: row[1]})
 	}
-	before := rootBytes(t, f.dir)
-	withHostProjects(f)
-	rep := f.call("project", "resolve", "--dry-run").(map[string]any)
-	if rep["rows"] != 6.0 || rep["empty"] != 1.0 || rep["already_id"] != 1.0 || rep["kind_id_to_id"] != 1.0 || rep["name_to_id"] != 1.0 || rep["rewritten"] != 2.0 {
-		t.Fatalf("dry run counts: %v", rep)
+	before := rootBytes(t, st.Dir)
+
+	rep, err := st.ResolveProjects(testHostProjects, true)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if un := rep["unmatched"].([]any); len(un) != 1 || un[0].(map[string]any)["name"] != "ghost" {
-		t.Fatalf("unmatched: %v", rep["unmatched"])
+	if rep.Rows != 6 || rep.Empty != 1 || rep.AlreadyID != 1 || rep.KindToID != 1 || rep.NameToID != 1 || rep.Rewritten != 2 {
+		t.Fatalf("dry run counts: %+v", rep)
 	}
-	if am := rep["ambiguous"].([]any); len(am) != 1 || am[0].(map[string]any)["name"] != "DUP" {
-		t.Fatalf("ambiguous: %v", rep["ambiguous"])
+	if len(rep.Unmatched) != 1 || rep.Unmatched[0].Name != "ghost" {
+		t.Fatalf("unmatched: %+v", rep.Unmatched)
 	}
-	for name, b := range rootBytes(t, f.dir) {
+	if len(rep.Ambiguous) != 1 || rep.Ambiguous[0].Name != "DUP" {
+		t.Fatalf("ambiguous: %+v", rep.Ambiguous)
+	}
+	for name, b := range rootBytes(t, st.Dir) {
 		if before[name] != b {
 			t.Fatalf("dry run wrote %s", name)
 		}
 	}
-	rep = f.call("project", "resolve").(map[string]any)
-	if rep["rewritten"] != 2.0 || rep["backup"] == "" {
-		t.Fatalf("real run: %v", rep)
+
+	rep, err = st.ResolveProjects(testHostProjects, false)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, e := os.Stat(filepath.Join(rep["backup"].(string), "roots")); e != nil {
+	if rep.Rewritten != 2 || rep.Backup == "" {
+		t.Fatalf("real run: %+v", rep)
+	}
+	if _, e := os.Stat(filepath.Join(rep.Backup, "roots")); e != nil {
 		t.Fatal("no backup:", e)
 	}
-	after := rootBytes(t, f.dir)
+	after := rootBytes(t, st.Dir)
 	changed := 0
 	for name, b := range after {
 		if before[name] != b {
@@ -82,110 +77,30 @@ func TestProjectResolveMigration(t *testing.T) {
 		t.Fatalf("%d root files changed, want 2 (a and b)", changed)
 	}
 	for id, want := range map[string][2]string{"a": {"1", "Alpha"}, "b": {"2", "Beta"}, "c": {"1", ""}, "d": {"ghost", ""}, "e": {"DUP", ""}} {
-		if q := mustResolve(t, f.a.store, id); q.Project != want[0] || q.ProjectLabel != want[1] {
+		if q := mustResolve(t, st, id); q.Project != want[0] || q.ProjectLabel != want[1] {
 			t.Fatalf("lane %s: project %q label %q, want %v", id, q.Project, q.ProjectLabel, want)
 		}
 	}
-	if rep = f.call("project", "resolve").(map[string]any); rep["rewritten"] != 0.0 || rep["backup"] != nil && rep["backup"] != "" {
-		t.Fatalf("second run: %v", rep)
+	rep, err = st.ResolveProjects(testHostProjects, false)
+	if err != nil || rep.Rewritten != 0 || rep.Backup != "" {
+		t.Fatalf("second run: %+v (%v)", rep, err)
 	}
 }
 
-// A name typed on write is stored as the project's id; the list shows and
-// filters by the name; an ambiguous name stays as typed.
-func TestProjectNameResolvesOnWriteAndShowsAsName(t *testing.T) {
-	f := newCLI(t)
-	withHostProjects(f)
-	f.call("lane", "add", "x", "--project", "beta")
-	f.call("lane", "add", "y", "--project", "dup")
-	if q := mustResolve(t, f.a.store, "x"); q.Project != "2" || q.ProjectLabel != "Beta" {
+func TestProjectNameResolvesOnWrite(t *testing.T) {
+	st := testStore(t)
+	st.BackupDaily = false
+	st.ProjectRef = func(ref string) projectMatch { return resolveProjectRef(testHostProjects, ref) }
+
+	mustAdd(t, st, Spec{Name: "x", Project: "beta"})
+	mustAdd(t, st, Spec{Name: "y", Project: "dup"})
+	if q := mustResolve(t, st, "x"); q.Project != "2" || q.ProjectLabel != "Beta" {
 		t.Fatalf("stored %q (%q)", q.Project, q.ProjectLabel)
 	}
-	if q := mustResolve(t, f.a.store, "y"); q.Project != "dup" {
+	if q := mustResolve(t, st, "y"); q.Project != "dup" {
 		t.Fatalf("ambiguous name stored as %q", q.Project)
 	}
-	rows := f.call("lane", "rows", "--project", "BETA").([]any)
-	if len(rows) != 1 {
-		t.Fatalf("rows by name: %v", rows)
-	}
-	got := f.call("lane", "list").([]any)
-	for _, r := range got {
-		if m := r.(map[string]any); m["name"] == "x" && (m["effective_project"] != "Beta" || m["effective_project_id"] != "2") {
-			t.Fatalf("list row: %v", m)
-		}
-	}
-	// The project is gone from the host: the name kept on the lane is shown.
-	f.a.run = func(context.Context, []string) ([]byte, error) { return []byte(`[]`), nil }
-	f.a.projectsAt = f.a.projectsAt.Add(-1 << 40)
-	if v := f.a.store.view(mustResolve(t, f.a.store, "x"), nil); v.EffectiveProject != "Beta" {
-		t.Fatalf("gone project shown as %q", v.EffectiveProject)
-	}
-}
-
-// With no host projects nothing is rewritten and nothing errors.
-func TestProjectStandaloneKeepsNames(t *testing.T) {
-	f := newCLI(t)
-	if e := f.a.r.Settings().Set("lanes.project-source", "none"); e != nil {
-		t.Fatal(e)
-	}
-	f.call("lane", "add", "x", "--project", "Beta")
-	if q := mustResolve(t, f.a.store, "x"); q.Project != "Beta" || q.ProjectLabel != "" {
-		t.Fatalf("standalone stored %q (%q)", q.Project, q.ProjectLabel)
-	}
-	if v := f.a.store.view(mustResolve(t, f.a.store, "x"), nil); v.EffectiveProject != "Beta" {
-		t.Fatalf("shown as %q", v.EffectiveProject)
-	}
-}
-
-// A read never asks the host for a stored project: every lane is listed by the
-// name kept on it, found by name, id or mtm:<id>, with the host down. Only a
-// name no stored lane matches goes to the host, once.
-func TestProjectHostFailureDoesNotHoldRows(t *testing.T) {
-	f := newCLI(t)
-	withHostProjects(f)
-	for _, n := range []string{"a", "b", "c", "d"} {
-		f.call("lane", "add", n, "--project", "beta")
-	}
-	asked := 0
-	release := make(chan struct{})
-	t.Cleanup(func() { close(release) })
-	f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
-		if strings.Join(argv, " ") == "mtm project list" {
-			asked++
-			<-release // a host that never answers in time
-		}
-		return nil, os.ErrNotExist
-	}
-	f.a.pmu.Lock()
-	f.a.projects, f.a.projectsAt, f.a.projectsFailAt = nil, f.a.projectsAt.Add(-1<<40), f.a.projectsFailAt.Add(-1<<40)
-	f.a.pmu.Unlock()
-	start := time.Now()
-	for _, q := range []string{"Beta", "beta", "2", "mtm:2"} {
-		rows := f.call("lane", "rows", "--project", q).([]any)
-		if len(rows) != 4 {
-			t.Fatalf("project %q with the host down listed %d rows, want 4", q, len(rows))
-		}
-		if m := rows[0].(map[string]any)["data"].(map[string]any); m["project"] != "Beta" {
-			t.Fatalf("project shown as %v, want the kept name", m)
-		}
-	}
-	if d := time.Since(start); d > 5*time.Second {
-		t.Fatalf("rows waited %v on the host", d)
-	}
-	if asked != 0 {
-		t.Fatalf("reads asked the host %d times, want none", asked)
-	}
-	f.a.run = func(_ context.Context, argv []string) ([]byte, error) {
-		if strings.Join(argv, " ") == "mtm project list" {
-			asked++
-		}
-		return nil, os.ErrNotExist
-	}
-	f.a.pmu.Lock()
-	f.a.projectsFailAt = time.Time{}
-	f.a.projectsAt = time.Time{}
-	f.a.pmu.Unlock()
-	if rows := f.call("lane", "rows", "--project", "Gamma").([]any); len(rows) != 0 || asked != 1 {
-		t.Fatalf("unknown name: %d rows, host asked %d times, want 0 rows and one ask", len(rows), asked)
+	if v := st.view(mustResolve(t, st, "x"), nil); v.EffectiveProject != "Beta" || v.EffectiveProjectID != "2" {
+		t.Fatalf("view = %+v", v)
 	}
 }

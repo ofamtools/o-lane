@@ -8,8 +8,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -18,7 +20,6 @@ import (
 	table "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
-	"ofam.dev/ochazuke"
 )
 
 const defaultImportColumns = `{"lane":"name","scope":"scope","work":"scope","what":"scope","repo":"repo","depends on":"depends","estimate":"estimate","est.":"estimate","lane time":"estimate","agent time":"estimate","done when":"done_when","tests and stories":"tests"}`
@@ -31,6 +32,57 @@ type planDefinition struct {
 	Name   string `json:"name"`
 	Lanes  []Spec `json:"lanes"`
 	fields []map[string]any
+}
+
+// PlanSummary summarizes a plan referenced by one or more lanes in the store.
+type PlanSummary struct {
+	ID        string   `json:"id"`
+	Path      string   `json:"path"`
+	Name      string   `json:"name"`
+	LaneCount int      `json:"lane_count"`
+	DoneCount int      `json:"done_count"`
+	OpenCount int      `json:"open_count"`
+	RootIDs   []string `json:"root_ids,omitempty"`
+	Projects  []string `json:"projects,omitempty"`
+	Updated   string   `json:"updated,omitempty"`
+}
+
+func decode(v any, out any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
+}
+
+func jsonFields(v any) []string {
+	t := reflect.TypeOf(v)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	var out []string
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func unknownKeys(row map[string]any, known []string) []string {
+	var out []string
+	for k := range row {
+		if !slices.Contains(known, k) {
+			out = append(out, fmt.Sprintf("unknown field %q (ignored)", k))
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func parseImportColumns(raw string) (map[string]string, error) {
@@ -215,35 +267,12 @@ func parsePlan(path string, src []byte, columns map[string]string) (planDefiniti
 	return p, nil
 }
 
-func defineParams() map[string]ochazuke.Parameter {
-	return map[string]ochazuke.Parameter{
-		"lanes":     {Type: "array", Description: "JSON lane specs; exclusive with plan/plans-dir"},
-		"plan":      param("Markdown plan path or exact filename in lanes.plans-dir"),
-		"plans-dir": param("Recursively check Markdown plans; requires dry-run"),
-		"dry-run":   {Type: "boolean", Description: "Parse and list definitions without accessing the lane store"},
-		"name":      param("Root name; defaults to the plan title or filename"),
-		"wording":   param("Verbatim owner wording on root creation only"),
-		"task":      param("Optional root task link"),
-		"project":   projectParam("Project for the batch's top lanes (plan: the root); children inherit. " + projectHelp),
-	}
-}
-
-func planDefineParams() map[string]ochazuke.Parameter {
-	p := defineParams()
-	delete(p, "lanes")
-	delete(p, "plans-dir")
-	path := p["plan"]
-	path.Required = true
-	p["plan"] = path
-	return p
-}
-
-func (a *App) planPath(path string) (string, error) {
+func resolvePlanPath(path, plansDir string) (string, error) {
 	if path == "" {
 		return "", errors.New("plan path is required")
 	}
-	if !filepath.IsAbs(path) && filepath.Dir(path) == "." && a.r.Settings().String("lanes.plans-dir") != "" {
-		path = filepath.Join(a.r.Settings().String("lanes.plans-dir"), path)
+	if !filepath.IsAbs(path) && filepath.Dir(path) == "." && plansDir != "" {
+		path = filepath.Join(plansDir, path)
 		if filepath.Ext(path) == "" {
 			path += ".md"
 		}
@@ -251,8 +280,8 @@ func (a *App) planPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func (a *App) readPlan(path string, columns map[string]string) (planDefinition, error) {
-	path, e := a.planPath(path)
+func readPlanFile(path, plansDir string, columns map[string]string) (planDefinition, error) {
+	path, e := resolvePlanPath(path, plansDir)
 	if e != nil {
 		return planDefinition{}, e
 	}
@@ -278,7 +307,7 @@ type planChecks struct {
 	Errors int         `json:"errors"`
 }
 
-func (a *App) checkPlans(dir string, columns map[string]string) (planChecks, error) {
+func checkPlansDir(dir, plansDir string, columns map[string]string) (planChecks, error) {
 	out := planChecks{Plans: []planCheck{}}
 	e := filepath.WalkDir(dir, func(path string, d fs.DirEntry, e error) error {
 		if e != nil {
@@ -287,7 +316,7 @@ func (a *App) checkPlans(dir string, columns map[string]string) (planChecks, err
 		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
-		p, e := a.readPlan(path, columns)
+		p, e := readPlanFile(path, plansDir, columns)
 		row := planCheck{Path: path, Lanes: len(p.Lanes)}
 		if errors.Is(e, errNoLanes) {
 			row.Skipped = true
@@ -301,104 +330,12 @@ func (a *App) checkPlans(dir string, columns map[string]string) (planChecks, err
 	return out, e
 }
 
-func (a *App) define(args ochazuke.Arguments, warn func(string)) ochazuke.Result {
-	str := func(k string) string { return ochazuke.StringArg(args, k, "") }
-	dry, _ := args["dry-run"].(bool)
-	_, hasJSON := args["lanes"]
-	sources := 0
-	for _, present := range []bool{hasJSON, str("plan") != "", str("plans-dir") != ""} {
-		if present {
-			sources++
-		}
-	}
-	if sources != 1 {
-		return done(nil, errors.New("define requires exactly one of lanes, plan or plans-dir"))
-	}
-	if str("plans-dir") != "" {
-		if !dry {
-			return done(nil, errors.New("plans-dir requires dry-run"))
-		}
-		columns, e := parseImportColumns(a.r.Settings().String("lanes.import-columns"))
-		if e != nil {
-			return done(nil, e)
-		}
-		result, e := a.checkPlans(str("plans-dir"), columns)
-		if e != nil {
-			return done(nil, e)
-		}
-		// Error counts and per-file reasons remain machine-readable, including failures.
-		return done(result, nil)
-	}
-	var specs []Spec
-	var fields []map[string]any
-	if hasJSON {
-		if str("name") != "" || str("wording") != "" || str("task") != "" {
-			return done(nil, errors.New("name, wording and task require a plan"))
-		}
-		if e := decode(args["lanes"], &specs); e != nil {
-			return done(nil, e)
-		}
-		if e := decode(args["lanes"], &fields); e != nil {
-			return done(nil, e)
-		}
-		defineKeyNotices(specs, fields, warn)
-	} else {
-		columns, e := parseImportColumns(a.r.Settings().String("lanes.import-columns"))
-		if e != nil {
-			return done(nil, e)
-		}
-		p, e := a.readPlan(str("plan"), columns)
-		if e != nil {
-			return done(nil, e)
-		}
-		if str("name") != "" {
-			p.Name = str("name")
-		}
-		root := Spec{Name: p.Name, Wording: str("wording"), Task: str("task"), Plan: p.Path, Project: str("project")}
-		specs = append(specs, root)
-		var rootFields map[string]any
-		_ = decode(root, &rootFields)
-		fields = append(fields, rootFields)
-		for i, spec := range p.Lanes {
-			if spec.Name == root.Name {
-				return done(nil, fmt.Errorf("plan root and child share name %q; choose a root name", root.Name))
-			}
-			spec.Parent = root.Name
-			specs = append(specs, spec)
-			fields = append(fields, p.fields[i])
-		}
-	}
-	if project := str("project"); project != "" && hasJSON {
-		// The batch's top lanes (parent outside the batch) take the project
-		// unless they name their own; batch children inherit from them.
-		names := map[string]bool{}
-		for _, spec := range specs {
-			names[spec.Name] = true
-		}
-		for i := range specs {
-			if specs[i].Project == "" && !names[specs[i].Parent] {
-				specs[i].Project = project
-				if fields[i] == nil {
-					fields[i] = map[string]any{}
-				}
-				fields[i]["project"] = project
-			}
-		}
-	}
-	a.store.fillUntitled(specs)
-	if e := validateDefinitions(specs); e != nil {
-		return done(nil, e)
-	}
-	if dry {
-		return done(specs, nil)
-	}
-	rows, e := a.store.defineFields(specs, fields)
-	return done(rows, e)
-}
-
 // defineKeyNotices names each key of a JSON definition that is no spec
 // field and no prop lane set writes: never dropped in silence, never refused.
 func defineKeyNotices(specs []Spec, fields []map[string]any, warn func(string)) {
+	if warn == nil {
+		return
+	}
 	known := append(jsonFields(Spec{}), lifecycleProps...)
 	for i, row := range fields {
 		for _, text := range unknownKeys(row, known) {
@@ -407,20 +344,89 @@ func defineKeyNotices(specs []Spec, fields []map[string]any, warn func(string)) 
 	}
 }
 
-func (a *App) planLanes(path string) ochazuke.Result {
-	path, e := a.planPath(path)
+// defineFromPlan parses a Markdown plan file and defines its root + child lanes.
+func defineFromPlan(s *Store, planPath, plansDir, rootName, wording, task, project string, dry bool, columns map[string]string) ([]Lane, []Spec, error) {
+	p, e := readPlanFile(planPath, plansDir, columns)
 	if e != nil {
-		return done(nil, e)
+		return nil, nil, e
 	}
-	rows, e := a.store.List()
-	if e != nil {
-		return done(nil, e)
+	if rootName != "" {
+		p.Name = rootName
 	}
-	out := []View{}
+	root := Spec{Name: p.Name, Wording: wording, Task: task, Plan: p.Path, Project: project}
+	specs := []Spec{root}
+	var rootFields map[string]any
+	_ = decode(root, &rootFields)
+	fields := []map[string]any{rootFields}
+	for i, spec := range p.Lanes {
+		if spec.Name == root.Name {
+			return nil, nil, fmt.Errorf("plan root and child share name %q; choose a root name", root.Name)
+		}
+		spec.Parent = root.Name
+		specs = append(specs, spec)
+		fields = append(fields, p.fields[i])
+	}
+	s.fillUntitled(specs)
+	if e := validateDefinitions(specs); e != nil {
+		return nil, nil, e
+	}
+	if dry {
+		return nil, specs, nil
+	}
+	rows, e := s.defineFields(specs, fields)
+	return rows, specs, e
+}
+
+// listPlans aggregates all distinct plans referenced by visible lanes in the store.
+func listPlans(s *Store, rows []Lane) []PlanSummary {
+	byPlan := map[string]*PlanSummary{}
+	statuses := s.statuses()
 	for _, q := range rows {
-		if q.Plan == path {
-			out = append(out, a.store.view(q, rows))
+		if q.Plan == "" {
+			continue
+		}
+		ps, ok := byPlan[q.Plan]
+		if !ok {
+			name := strings.TrimSuffix(filepath.Base(q.Plan), filepath.Ext(q.Plan))
+			if q.Parent == "" && q.Name != "" {
+				name = q.Name
+			}
+			ps = &PlanSummary{ID: slug(q.Plan), Path: q.Plan, Name: name}
+			byPlan[q.Plan] = ps
+		}
+		if q.Parent == "" {
+			if q.Name != "" {
+				ps.Name = q.Name
+			}
+			ps.RootIDs = append(ps.RootIDs, q.ID)
+		}
+		ps.LaneCount++
+		if s.complete(q.Status) {
+			ps.DoneCount++
+		} else if !statuses[q.Status].Archive {
+			ps.OpenCount++
+		}
+		if proj, from := effectiveProject(rows, q); proj != "" {
+			disp := s.projectDisplay(proj, labelOf(rows, from))
+			if !slices.Contains(ps.Projects, disp) {
+				ps.Projects = append(ps.Projects, disp)
+			}
+		}
+		ts := q.Updated.UTC().Format("2006-01-02T15:04:05Z")
+		if ts > ps.Updated {
+			ps.Updated = ts
 		}
 	}
-	return done(out, nil)
+	out := make([]PlanSummary, 0, len(byPlan))
+	for _, ps := range byPlan {
+		sort.Strings(ps.Projects)
+		out = append(out, *ps)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Updated != out[j].Updated {
+			return out[i].Updated > out[j].Updated
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }

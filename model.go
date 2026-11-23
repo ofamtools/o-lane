@@ -8,11 +8,78 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"ofam.dev/ochazuke"
 )
 
-type Actor = ochazuke.Actor
+// Actor identifies who made a change in the lane history and undo log.
+// JSON field names match o-lane v1's ochazuke.Actor 1:1 for on-disk compatibility.
+type Actor struct {
+	Kind    string `json:"kind,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Harness string `json:"harness,omitempty"`
+	Pane    string `json:"pane,omitempty"`
+	Session string `json:"session,omitempty"`
+	Model   string `json:"model,omitempty"`
+}
+
+func Owner() Actor { return Actor{Kind: "owner"} }
+
+func (a Actor) IsAgent() bool { return a.Kind == "agent" }
+
+func (a Actor) Label() string {
+	if a.Name != "" {
+		return a.Name
+	}
+	if a.Harness != "" {
+		return a.Harness
+	}
+	if a.Kind != "" {
+		return a.Kind
+	}
+	return "owner"
+}
+
+// ParseActor reads an explicit OCHAZUKE_ACTOR value (either a bare kind such as
+// "owner" or "agent", or "kind:name", or a JSON object).
+func ParseActor(raw string) (Actor, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return Actor{}, errors.New("empty actor")
+	}
+	if strings.HasPrefix(raw, "{") {
+		var a Actor
+		if err := json.Unmarshal([]byte(raw), &a); err != nil {
+			return Actor{}, err
+		}
+		if a.Kind == "" {
+			a.Kind = "owner"
+		}
+		return a, nil
+	}
+	kind, name, hasColon := strings.Cut(raw, ":")
+	kind = strings.TrimSpace(kind)
+	name = strings.TrimSpace(name)
+	if kind != "owner" && kind != "agent" {
+		return Actor{}, fmt.Errorf("unknown actor kind %q", kind)
+	}
+	if !hasColon {
+		return Actor{Kind: kind}, nil
+	}
+	return Actor{Kind: kind, Name: name}, nil
+}
+
+// RefusedError reports a policy refusal (e.g. unknown actor).
+type RefusedError struct {
+	Verb   string
+	Rule   string
+	Reason string
+}
+
+func (e *RefusedError) Error() string {
+	if e.Verb != "" {
+		return fmt.Sprintf("refused %s (%s): %s", e.Verb, e.Rule, e.Reason)
+	}
+	return fmt.Sprintf("refused (%s): %s", e.Rule, e.Reason)
+}
 
 type Status struct {
 	Name   string `json:"name"`

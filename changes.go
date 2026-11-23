@@ -335,8 +335,9 @@ func (s *Store) Duplicate(target, name string) (out Lane, err error) {
 	return
 }
 func (s *Store) status(q *Lane, status, note string) error {
-	if _, ok := s.statuses()[status]; !ok {
-		return fmt.Errorf("unknown status %q; configure lanes.statuses to add it", status)
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return errors.New("status must not be empty")
 	}
 	old := q.Status
 	q.Status = status

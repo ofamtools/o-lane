@@ -14,13 +14,19 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"ofam.dev/ochazuke"
 )
+
+func fixture(t *testing.T) string {
+	t.Helper()
+	for _, k := range []string{"PI_SESSION_ID", "PI_SESSION_FILE", "OMP_PROFILE", "CODEX_THREAD_ID", "CODEX_CI", "CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "MTM_HARNESS", "AGENT_HARNESS", "OCHAZUKE_HARNESS", "OCHAZUKE_ACTOR"} {
+		t.Setenv(k, "")
+	}
+	return filepath.Join(t.TempDir(), "data")
+}
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	return &Store{Dir: fixture(t), Actor: ochazuke.Owner()}
+	return &Store{Dir: fixture(t), Actor: Owner()}
 }
 func mustAdd(t *testing.T, s *Store, spec Spec) Lane {
 	t.Helper()
@@ -250,7 +256,7 @@ func TestStoreBackups(t *testing.T) {
 }
 func TestStoreLockProcess(t *testing.T) {
 	if dir := os.Getenv("O_LANE_TEST_CHILD"); dir != "" {
-		s := &Store{Dir: dir, Actor: ochazuke.Owner()}
+		s := &Store{Dir: dir, Actor: Owner()}
 		for i := 0; i < 8; i++ {
 			if _, e := s.Annotate("root", fmt.Sprint(os.Getpid(), "-", i)); e != nil {
 				t.Fatal(e)

@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"strings"
-
-	"ofam.dev/ochazuke"
 )
+
+const hostEnvMTM = "MTM_"
 
 // Detectors describe identifying run variables and weaker presence signals.
 // Keep model attribution in the common AGENT_MODEL/OCHAZUKE_MODEL fields:
@@ -29,7 +29,7 @@ func firstEnv(env func(string) string, keys []string) string {
 }
 
 func detectHarness(env func(string) string) (string, string) {
-	explicit := env(ochazuke.HostEnvMTM + "HARNESS")
+	explicit := env(hostEnvMTM + "HARNESS")
 	if explicit == "" {
 		explicit = firstEnv(env, []string{"AGENT_HARNESS", "OCHAZUKE_HARNESS"})
 	}
@@ -58,16 +58,20 @@ func detectHarness(env func(string) string) (string, string) {
 // explicit override may fill identity fields, never promote a detected agent.
 func cliActor(env func(string) string) (Actor, error) {
 	harness, run := detectHarness(env)
-	a := Actor{Kind: "owner", Name: env(ochazuke.HostEnvMTM + "AGENT_NAME"), Harness: harness, Pane: env(ochazuke.HostEnvMTM + "PANE_ID"), Session: env(ochazuke.HostEnvMTM + "SESSION"), Model: firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"})}
+	a := Actor{
+		Kind:    "owner",
+		Name:    env(hostEnvMTM + "AGENT_NAME"),
+		Harness: harness,
+		Pane:    env(hostEnvMTM + "PANE_ID"),
+		Session: env(hostEnvMTM + "SESSION"),
+		Model:   firstEnv(env, []string{"AGENT_MODEL", "OCHAZUKE_MODEL"}),
+	}
 	detected := a.Harness != ""
 	if detected {
 		a.Kind = "agent"
 	}
 	if env("OCHAZUKE_ACTOR") != "" {
-		// ParseActor, not ActorFromEnv: the framework's own environment
-		// detection names a Pi session "pi", and this file's table owns the
-		// harness name (omp).
-		explicit, e := ochazuke.ParseActor(strings.TrimSpace(env("OCHAZUKE_ACTOR")))
+		explicit, e := ParseActor(strings.TrimSpace(env("OCHAZUKE_ACTOR")))
 		if e != nil {
 			return Actor{}, fmt.Errorf("OCHAZUKE_ACTOR: %w", e)
 		}
@@ -101,26 +105,18 @@ func cliActor(env func(string) string) (Actor, error) {
 	return a, nil
 }
 
-var defaultLaneVerbs []verbSpec
-
-// init fills the table in init, not in the declaration: the rows' run
-// methods reach Store.permit, which reads the table.
-func init() { defaultLaneVerbs = (&App{}).specs() }
-
 func (s *Store) permit(action string) error {
 	if s.Actor.Kind == "" || s.Actor.Kind == "owner" {
 		return nil
 	}
 	if s.Actor.Kind != "agent" {
-		return &ochazuke.RefusedError{Verb: "lane." + action, Rule: "actor.unknown", Reason: "unknown actor cannot change lanes"}
+		return &RefusedError{Verb: "lane." + action, Rule: "actor.unknown", Reason: "unknown actor cannot change lanes"}
 	}
 	if s.Permit != nil {
 		return s.Permit(action)
 	}
-	for _, v := range defaultLaneVerbs {
-		if v.noun == "lane" && v.name == action && v.agent == ochazuke.AgentNever {
-			return &ochazuke.RefusedError{Verb: "lane." + action, Rule: "verb declaration", Reason: "agents may never run this verb; ask the owner"}
-		}
+	if action == "delete" {
+		return &RefusedError{Verb: "lane." + action, Rule: "verb declaration", Reason: "agents may never run this destructive verb; ask the owner"}
 	}
 	return nil
 }

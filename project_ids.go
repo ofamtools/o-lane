@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 )
 
 // A lane's project is stored as the id of the host's project (mtm's key), so
@@ -87,99 +85,6 @@ func resolveProjectRef(projects []hostProject, ref string) projectMatch {
 		m.IDs = append(m.IDs, p.ID)
 	}
 	return m
-}
-
-// How long a host project list is reused, and how long after a failed read
-// the host is left alone: a failed read is remembered so a page of hundreds
-// of rows asks once, not once per row.
-const (
-	projectsTTL     = 3 * time.Second
-	projectsFailTTL = 30 * time.Second
-)
-
-func (a *App) projectsFreshLocked() bool {
-	if !a.projectsAt.IsZero() && time.Since(a.projectsAt) <= projectsTTL {
-		return true
-	}
-	return !a.projectsFailAt.IsZero() && time.Since(a.projectsFailAt) <= projectsFailTTL
-}
-
-// fetchProjects reads the host once and records the answer or the failure.
-// It is bounded by the call that started it: a served process's next call
-// brings its own environment, so the read never outlives its call.
-func (a *App) fetchProjects(ctx context.Context, done chan struct{}) {
-	list, e := a.hostProjects(ctx)
-	a.pmu.Lock()
-	if e != nil {
-		a.projectsFailAt = time.Now() // keep the last good list, if any
-	} else {
-		a.projects, a.projectsAt, a.projectsFailAt = list, time.Now(), time.Time{}
-	}
-	a.pflight = nil
-	a.pmu.Unlock()
-	close(done)
-}
-
-// refreshProjects starts a read of the host's projects unless the cache is
-// fresh or one is under way; the returned channel closes when it ends (nil
-// when nothing was started and nothing is pending).
-func (a *App) refreshProjects() chan struct{} {
-	a.pmu.Lock()
-	defer a.pmu.Unlock()
-	if a.pflight != nil {
-		return a.pflight
-	}
-	if a.projectsFreshLocked() {
-		return nil
-	}
-	a.pflight, a.pstarted = make(chan struct{}), time.Now()
-	ctx := a.callCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	go a.fetchProjects(ctx, a.pflight)
-	return a.pflight
-}
-
-// projectCached is the last list the host gave, however old; it never waits.
-func (a *App) projectCached() []hostProject {
-	a.pmu.Lock()
-	defer a.pmu.Unlock()
-	return a.projects
-}
-
-// projectIndexWithin is the host's projects, waiting at most wait for a read
-// that is due; on a slow or failed read it is the last good list (or none),
-// so names stay as stored.
-func (a *App) projectIndexWithin(wait time.Duration) []hostProject {
-	if done := a.refreshProjects(); done != nil {
-		// A read already under way has used up part of the wait: callers
-		// after the first do not wait again for a host that is slow.
-		a.pmu.Lock()
-		wait -= time.Since(a.pstarted)
-		a.pmu.Unlock()
-		select {
-		case <-done:
-		case <-time.After(max(wait, 0)):
-		}
-	}
-	return a.projectCached()
-}
-
-// projectIndex is for a write, which needs the host to resolve a typed name:
-// it waits for the read (bounded by hostProjects's own timeout).
-func (a *App) projectIndex() []hostProject {
-	return a.projectIndexWithin(2 * projectsFailTTL)
-}
-
-// linkProjects gives the store its views of the host's projects.
-func (a *App) linkProjects() {
-	a.store.ProjectRef = func(ref string) projectMatch {
-		if strings.TrimSpace(ref) == "" {
-			return projectMatch{Status: projectEmpty}
-		}
-		return resolveProjectRef(a.projectIndex(), ref)
-	}
 }
 
 // projectDisplay is the name a stored project reference is shown as: the

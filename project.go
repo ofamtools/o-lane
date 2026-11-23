@@ -1,18 +1,11 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
-	"sort"
 	"strings"
-	"time"
-
-	"ofam.dev/ochazuke"
-	ocli "ofam.dev/ochazuke/cli"
 )
 
 // A project is a reference only: an id or name with an optional host kind
@@ -153,113 +146,5 @@ func projectSourceDefault() string {
 // hostProject is a project of the configured source: the id mtm keys it by
 // and the name people see and type.
 type hostProject struct{ ID, Name string }
-
-// hostProjects asks the configured source (lanes.project-source) for its
-// projects. Mounted calls use the host's complete argv; standalone calls
-// retain the injectable PATH runner. Source "none" has no projects.
-func (a *App) hostProjects(ctx context.Context) ([]hostProject, error) {
-	switch source := a.r.Settings().String("lanes.project-source"); source {
-	case "", "none":
-		return nil, nil
-	case "mtm":
-		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
-		host, hosted, e := ocli.HostFromEnv()
-		if e != nil {
-			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
-		}
-		var b []byte
-		if hosted {
-			b, e = host.Run(ctx, "project.list", nil)
-		} else {
-			b, e = a.run(ctx, []string{"mtm", "project", "list"})
-		}
-		if e != nil {
-			return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
-		}
-		// mtm answers an array, or {"items": [...]} for a paged list.
-		var rows []struct{ ID, Name, Label string }
-		if e = json.Unmarshal(b, &rows); e != nil {
-			var page struct {
-				Items []struct{ ID, Name, Label string }
-			}
-			if e2 := json.Unmarshal(b, &page); e2 != nil {
-				return nil, fmt.Errorf("lanes.project-source mtm: %w", e)
-			}
-			rows = page.Items
-		}
-		out := []hostProject{}
-		for _, r := range rows {
-			name := r.Name
-			if name == "" {
-				name = r.Label
-			}
-			if name == "" {
-				name = r.ID
-			}
-			out = append(out, hostProject{ID: r.ID, Name: name})
-		}
-		return out, nil
-	default:
-		return nil, fmt.Errorf("lanes.project-source: unknown source %q; use mtm or none", source)
-	}
-}
-
-// sourceProjects is the source's projects as choosable references: the name.
-func (a *App) sourceProjects(ctx context.Context) ([]projectRow, error) {
-	list, e := a.hostProjects(ctx)
-	out := []projectRow{}
-	for _, p := range list {
-		out = append(out, projectRow{Ref: p.Name, Name: p.Name, Source: a.r.Settings().String("lanes.project-source")})
-	}
-	return out, e
-}
-
-// projectRows merges references recorded on lanes with the source's projects.
-func (a *App) projectRows(ctx context.Context) ([]projectRow, error) {
-	lanes, e := a.store.List()
-	if e != nil {
-		return nil, e
-	}
-	counts := map[string]int{}
-	for _, q := range lanes {
-		if p, from := effectiveProject(lanes, q); p != "" {
-			counts[a.store.projectDisplay(p, labelOf(lanes, from))]++
-		}
-	}
-	out := []projectRow{}
-	source, srcErr := a.sourceProjects(ctx)
-	for _, r := range source {
-		for ref, n := range counts {
-			if projectMatches(ref, r.Ref) {
-				r.Lanes += n
-				delete(counts, ref)
-			}
-		}
-		out = append(out, r)
-	}
-	for ref, n := range counts {
-		out = append(out, projectRow{Ref: ref, Source: "lanes", Lanes: n})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return strings.ToLower(out[i].Ref) < strings.ToLower(out[j].Ref) })
-	return out, srcErr
-}
-
-func (a *App) projectChoices(ctx context.Context) ([]ochazuke.Choice, error) {
-	rows, e := a.projectRows(ctx)
-	out := []ochazuke.Choice{}
-	for _, r := range rows {
-		out = append(out, ochazuke.Choice{ID: r.Ref, Label: r.Ref})
-	}
-	// A failed source still offers recorded references; free text is accepted.
-	if len(out) > 0 {
-		e = nil
-	}
-	return out, e
-}
-
-func projectParam(desc string) ochazuke.Parameter {
-	return ochazuke.Parameter{Type: "string", Source: "project.choices", Free: true, Description: desc}
-}
 
 const projectHelp = "Project reference (id or name, optional kind such as mtm:<id>); agents should always set one. Children inherit it; missing is unassociated"
